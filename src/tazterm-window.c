@@ -1,20 +1,20 @@
-/* tazterm-window.c — E3: GtkWindow 900x600 + TaztermSplit + recherche.
+/* tazterm-window.c — GtkWindow 900x600 + TaztermSplit + search.
  *
- * Raccourcis :
- *   Ctrl+Shift+C / V / Q : copier / coller / tout quitter (figes E1)
- *   Ctrl+Shift+F          : afficher/masquer la recherche (toggle ;
- *                           Entree = suivant, Shift+Entree = precedent,
- *                           Echap = fermer, aussi depuis le terminal)
- *   Ctrl+Plus / Moins / 0 : zoom avant / arriere / taille normale
- *   Ctrl+Shift+E          : diviser cote a cote (paned horizontal)
- *   Ctrl+Shift+O          : diviser empiles (paned vertical)
- *   Ctrl+Shift+W          : fermer le panneau courant
- *   Ctrl+Shift+A          : ouvrir un split agent IA (panneau actif)
- *   Ctrl+Shift+S          : copier le scrollback (presse-papier + /tmp)
- *   Ctrl+Shift+X          : expliquer la derniere erreur (/tmp + presse-papier)
- *   Alt+Fleches           : focus au panneau voisin
- * Toutes les actions terminal (copier, recherche, zoom) visent le panneau
- * actif. Le dernier panneau ferme quitte (via hook empty du split).
+ * Shortcuts:
+ *   Ctrl+Shift+C / V / Q : copy / paste / quit all
+ *   Ctrl+Shift+F          : show/hide search (toggle; Enter = next,
+ *                           Shift+Enter = previous, Esc closes, also
+ *                           from the terminal)
+ *   Ctrl+Plus / Minus / 0 : zoom in / out / reset
+ *   Ctrl+Shift+E          : split side by side (horizontal paned)
+ *   Ctrl+Shift+O          : split stacked (vertical paned)
+ *   Ctrl+Shift+W          : close current pane
+ *   Ctrl+Shift+A          : open an agent split (active pane)
+ *   Ctrl+Shift+S          : copy scrollback (clipboard + /tmp)
+ *   Ctrl+Shift+X          : explain last error (/tmp + clipboard)
+ *   Alt+Arrows            : focus neighbor pane
+ * Every terminal action (copy, search, zoom) targets the active pane.
+ * The last closed pane quits (via the split's empty hook).
  */
 #include "tazterm-window.h"
 #include "tazterm-ai.h"
@@ -27,11 +27,11 @@
 typedef struct {
 	GtkWidget *win;
 	GtkWidget *split;
-	TaztermConfig *cfg; /* non possede (main) */
+	TaztermConfig *cfg; /* not owned (main) */
 	GtkWidget *search_bar;
 	GtkWidget *search_entry;
-	char **agents;      /* detectes au PATH (g_strfreev) */
-	char *agent;        /* defaut (g_free, NULL si aucun) */
+	char **agents;      /* detected on PATH (g_strfreev) */
+	char *agent;        /* default (g_free, NULL if none) */
 	gboolean fullscreen;
 } TaztermWin;
 
@@ -47,7 +47,7 @@ win_free(gpointer data)
 
 #define TW(x) ((TaztermWin *) (x))
 
-/* --- titre -------------------------------------------------------------- */
+/* --- title -------------------------------------------------------------- */
 
 static void
 title_update(TaztermWin *tw, VteTerminal *term)
@@ -65,7 +65,7 @@ title_update(TaztermWin *tw, VteTerminal *term)
 	}
 }
 
-/* --- recherche ------------------------------------------------------ */
+/* --- search ------------------------------------------------------------- */
 
 static void search_hide(TaztermWin *tw);
 
@@ -79,7 +79,7 @@ search_is_shown(TaztermWin *tw)
 static void
 search_show(TaztermWin *tw)
 {
-	/* Ctrl+Shift+F alterne : si deja ouverte, on la ferme. */
+	/* Ctrl+Shift+F toggles: close when already open. */
 	if (search_is_shown(tw)) {
 		search_hide(tw);
 		return;
@@ -115,7 +115,7 @@ on_search_changed(GtkSearchEntry *entry, gpointer data)
 		tazterm_term_search(term, text);
 }
 
-/* Entree = suivant, Shift+Entree = precedent, Echap = fermer. */
+/* Enter = next, Shift+Enter = previous, Esc = close. */
 static gboolean
 on_search_key(GtkWidget *widget, GdkEventKey *event, gpointer data)
 {
@@ -140,7 +140,7 @@ on_search_key(GtkWidget *widget, GdkEventKey *event, gpointer data)
 	return FALSE;
 }
 
-/* --- menu contextuel ------------------------------------------------- */
+/* --- context menu ------------------------------------------------------ */
 
 static void
 on_copy(GtkMenuItem *item, gpointer data)
@@ -240,7 +240,7 @@ on_fullscreen(GtkMenuItem *item, gpointer data)
 	fullscreen_set(tw, !tw->fullscreen);
 }
 
-/* Suit aussi les changements externes (ex. Openbox, EWMH). */
+/* Also track external changes (e.g. Openbox, EWMH). */
 static gboolean
 on_window_state(GtkWidget *widget, GdkEventWindowState *event,
     gpointer data)
@@ -255,11 +255,10 @@ on_window_state(GtkWidget *widget, GdkEventWindowState *event,
 	return FALSE;
 }
 
-/* --- actions IA (E4) -------------------------------------------------------- */
+/* --- AI actions ----------------------------------------------------------- */
 
-/* Split vertical dont le nouveau panneau spawne l'agent directement
- * (pas de feed_child : course perdue avec le spawn async du shell).
- * agent == NULL : defaut de la fenetre. */
+/* Vertical split whose new pane spawns the agent directly (no feed_child:
+ * lost race with the shell's async spawn). agent == NULL: window default. */
 static void
 ai_agent_split(TaztermWin *tw, const char *agent)
 {
@@ -269,7 +268,7 @@ ai_agent_split(TaztermWin *tw, const char *agent)
 		agent = tw->agent;
 	if (!agent) {
 		if (tazterm_debug())
-			g_printerr("tazterm: agent split sans agent\n");
+			g_printerr("tazterm: agent split without agent\n");
 		return;
 	}
 	cmd = tazterm_ai_launch_cmd(agent);
@@ -293,7 +292,7 @@ ai_copy_scrollback(TaztermWin *tw)
 	path = tazterm_ai_save_capture(tw->win, text, "capture");
 	if (tazterm_debug())
 		g_printerr("tazterm: scrollback copy -> %s\n",
-		    path ? path : "(echec)");
+		    path ? path : "(failed)");
 	g_free(text);
 	g_free(path);
 }
@@ -311,7 +310,7 @@ ai_explain(TaztermWin *tw)
 	    tw->cfg->ai_explain_lines);
 	if (tazterm_debug())
 		g_printerr("tazterm: explain -> %s\n",
-		    path ? path : "(echec)");
+		    path ? path : "(failed)");
 	g_free(path);
 }
 
@@ -319,10 +318,10 @@ static void
 on_agent_split(GtkMenuItem *item, gpointer data)
 {
 	(void) item;
-	ai_agent_split(TW(data), NULL); /* defaut */
+	ai_agent_split(TW(data), NULL); /* default */
 }
 
-/* Requete "split tel agent" (menu par agent) ; liberee avec le menu. */
+/* "Split this agent" request (per-agent menu); freed with the menu. */
 typedef struct {
 	TaztermWin *tw;
 	char *agent;
@@ -372,7 +371,7 @@ menu_add(GtkWidget *menu, const char *label,
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
 }
 
-/* Variante avec destruction du data quand l'item meurt (menu ephemere). */
+/* Variant destroying data when the item dies (ephemeral menu). */
 static void
 menu_add_data(GtkWidget *menu, const char *label,
     GCallback cb, gpointer data, GClosureNotify destroy)
@@ -411,7 +410,7 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 		char *label;
 		int i;
 
-		/* Raccourci = defaut ; menu = un item par agent detecte. */
+		/* Shortcut = default; menu = one item per detected agent. */
 		label = g_strdup_printf(
 		    _("Ouvrir un split agent (%s)"), tw->agent);
 		menu_add(menu, label, G_CALLBACK(on_agent_split), tw);
@@ -474,7 +473,7 @@ on_button_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 	return FALSE;
 }
 
-/* --- clavier ---------------------------------------------------------- */
+/* --- keyboard ----------------------------------------------------------- */
 
 static gboolean
 on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
@@ -490,21 +489,21 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 	shift = (event->state & GDK_SHIFT_MASK) != 0;
 	alt = (event->state & GDK_MOD1_MASK) != 0;
 
-	/* Echap dans le terminal alors que la recherche est ouverte :
-	 * on la ferme au lieu d'envoyer \e au shell. */
+	/* Esc in the terminal while search is open: close it instead of
+	 * sending \e to the shell. */
 	if (!ctrl && !alt && event->keyval == GDK_KEY_Escape &&
 	    search_is_shown(tw)) {
 		search_hide(tw);
 		return TRUE;
 	}
 
-	/* F11 : plein écran (sans modificateur, comme les terminaux usuels). */
+	/* F11: fullscreen (no modifier, like usual terminals). */
 	if (!ctrl && !alt && !shift && event->keyval == GDK_KEY_F11) {
 		fullscreen_set(tw, !tw->fullscreen);
 		return TRUE;
 	}
 
-	/* Navigation entre panneaux. */
+	/* Pane navigation. */
 	if (alt && !ctrl) {
 		switch (event->keyval) {
 		case GDK_KEY_Left:
@@ -584,7 +583,7 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 		switch (event->keyval) {
 		case GDK_KEY_plus:
 		case GDK_KEY_KP_Add:
-		case GDK_KEY_equal: /* '+' sans Shift sur certains layouts */
+		case GDK_KEY_equal: /* '+' without Shift on some layouts */
 			tazterm_term_zoom_in(term);
 			return TRUE;
 		case GDK_KEY_minus:
@@ -602,7 +601,7 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 	return FALSE;
 }
 
-/* --- hooks du split ------------------------------------------------------- */
+/* --- split hooks ---------------------------------------------------------- */
 
 static void
 on_title_changed(VteTerminal *term, gpointer data)
@@ -620,7 +619,7 @@ on_pane_focus(VteTerminal *term, gpointer data)
 	const char *text;
 
 	title_update(tw, term);
-	/* La recherche ouverte suit le panneau actif. */
+	/* Open search follows the active pane. */
 	if (search_is_shown(tw)) {
 		text = gtk_entry_get_text(GTK_ENTRY(tw->search_entry));
 		if (text && *text)
@@ -628,7 +627,7 @@ on_pane_focus(VteTerminal *term, gpointer data)
 	}
 }
 
-/* Fin d'un shell : retire son panneau (ferme la fenetre si dernier). */
+/* A shell ended: remove its pane (close the window when last). */
 static void
 on_child_exited(VteTerminal *term, int status, gpointer data)
 {
@@ -647,7 +646,7 @@ on_split_empty(gpointer data)
 	gtk_widget_destroy(tw->win);
 }
 
-/* Branche les signaux de chaque terminal cree par le split. */
+/* Hook up signals for every terminal created by the split. */
 static void
 term_setup(VteTerminal *term, gpointer data)
 {
@@ -663,7 +662,7 @@ term_setup(VteTerminal *term, gpointer data)
 	    G_CALLBACK(on_title_changed), tw);
 }
 
-/* --- construction ------------------------------------------------------- */
+/* --- build -------------------------------------------------------------- */
 
 GtkWidget *
 tazterm_window_new(TaztermConfig *cfg,
@@ -676,14 +675,14 @@ tazterm_window_new(TaztermConfig *cfg,
 	tw = g_new0(TaztermWin, 1);
 	tw->cfg = cfg;
 
-	/* Agents IA detectes une fois par fenetre. */
+	/* AI agents detected once per window. */
 	tw->agents = tazterm_ai_detect(cfg->ai_agent, &tw->agent);
 	if (tazterm_debug()) {
 		char *list = g_strjoinv(",", tw->agents);
 
-		g_printerr("tazterm: agents: %s (defaut: %s)\n",
-		    (list && *list) ? list : "(aucun)",
-		    tw->agent ? tw->agent : "(aucun)");
+		g_printerr("tazterm: agents: %s (default: %s)\n",
+		    (list && *list) ? list : "(none)",
+		    tw->agent ? tw->agent : "(none)");
 		g_free(list);
 	}
 
@@ -697,7 +696,7 @@ tazterm_window_new(TaztermConfig *cfg,
 	box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_container_add(GTK_CONTAINER(tw->win), box);
 
-	/* Barre de recherche (masquee par defaut), avec bouton fermer. */
+	/* Search bar (hidden by default), with close button. */
 	tw->search_bar = gtk_search_bar_new();
 	gtk_search_bar_set_show_close_button(
 	    GTK_SEARCH_BAR(tw->search_bar), TRUE);
@@ -719,7 +718,7 @@ tazterm_window_new(TaztermConfig *cfg,
 	    &hooks);
 	gtk_box_pack_start(GTK_BOX(box), tw->split, TRUE, TRUE, 0);
 
-	/* Etat attache a la fenetre, libere a sa destruction. */
+	/* State attached to the window, freed on destroy. */
 	g_object_set_data_full(G_OBJECT(tw->win), "tazterm-win", tw, win_free);
 
 	return tw->win;

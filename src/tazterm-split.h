@@ -1,8 +1,8 @@
-/* tazterm-split.h — E3: conteneur a panneaux (arbre GtkPaned recursif).
+/* tazterm-split.h — Pane container (recursive GtkPaned tree).
  *
- * Chaque feuille = un VteTerminal avec son propre shell. Le split possede
- * l'etat (panneau actif) et la structure ; la fenetre branche ses signaux
- * via les hooks (setup par terminal, focus, vide).
+ * Each leaf = a VteTerminal with its own shell. The split owns the state
+ * (active pane) and the structure; the window hooks its signals through
+ * callbacks (per-terminal setup, focus, empty).
  */
 #ifndef TAZTERM_SPLIT_H
 #define TAZTERM_SPLIT_H
@@ -22,45 +22,45 @@ typedef enum {
 } TaztermDirection;
 
 typedef struct {
-	/* Appele pour chaque terminal cree (initial + splits) : la fenetre
-	 * y branche key-press, clic-droit, titre, child-exited. */
+	/* Called for every created terminal (initial + splits): the window
+	 * connects key-press, right-click, title, child-exited there. */
 	void (*term_setup)(VteTerminal *term, gpointer data);
 	gpointer term_setup_data;
-	/* Appele quand le panneau actif change (titre, recherche). */
+	/* Called when the active pane changes (title, search). */
 	void (*focus_changed)(VteTerminal *term, gpointer data);
 	gpointer focus_data;
-	/* Appele quand il ne reste aucun panneau (fermer la fenetre). */
+	/* Called when no pane remains (close the window). */
 	void (*empty)(gpointer data);
 	gpointer empty_data;
 } TaztermSplitHooks;
 
-/* Nouveau conteneur avec un premier terminal. */
+/* New container with a first terminal. */
 GtkWidget *tazterm_split_new(TaztermConfig *cfg,
     const char *shell_override, const char *workdir_override,
     const TaztermSplitHooks *hooks);
 
-/* Terminal du panneau actif (jamais NULL tant qu'il reste un panneau). */
+/* Active pane's terminal (never NULL while a pane remains). */
 VteTerminal *tazterm_split_active_term(GtkWidget *split);
 
-/* Nombre de panneaux (debug / tests). */
+/* Pane count (debug / tests). */
 int tazterm_split_count(GtkWidget *split);
 
-/* Divise le panneau actif : cote a cote / empiles. */
+/* Split the active pane: side by side / stacked. */
 void tazterm_split_vertical(GtkWidget *split);
 void tazterm_split_horizontal(GtkWidget *split);
 
-/* Comme vertical, mais le nouveau panneau spawne command (agent)
- * au lieu d'un shell. */
+/* Like vertical, but the new pane spawns command (agent) instead
+ * of a shell. */
 void tazterm_split_vertical_cmd(GtkWidget *split, const char *command);
 
-/* Ferme le panneau contenant term (retire de l'arbre, collapse le parent).
- * Sans danger si term n'est plus dans l'arbre. Declenche empty() si vide. */
+/* Close the pane holding term (remove from tree, collapse parent).
+ * Safe when term already left the tree. Triggers empty() when empty. */
 void tazterm_split_remove_term(GtkWidget *split, VteTerminal *term);
 
-/* Ferme le panneau actif. */
+/* Close the active pane. */
 void tazterm_split_close_current(GtkWidget *split);
 
-/* Deplace le focus au panneau voisin dans la direction donnee. */
+/* Move focus to the neighbor pane in the given direction. */
 void tazterm_split_focus_dir(GtkWidget *split, TaztermDirection dir);
 
 G_END_DECLS

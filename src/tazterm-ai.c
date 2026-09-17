@@ -1,8 +1,8 @@
-/* tazterm-ai.c — E4: detection agents, capture scrollback, prompt erreur.
+/* tazterm-ai.c — Agent detection, scrollback capture, error prompt.
  *
- * Tout passe par du texte brut : le pty ne distingue pas un agent d'un
- * compilateur, donc opencode / claude / navette marchent sans adaptation
- * (navette one-shot comme TUI : stdout texte, stderr fusionne a l'ecran).
+ * Everything goes through raw text: the pty cannot tell an agent from
+ * a compiler, so opencode / claude / navette work with no adaptation
+ * (navette one-shot or TUI: plain stdout, screen-merged stderr).
  */
 #include "tazterm-ai.h"
 
@@ -36,7 +36,7 @@ tazterm_ai_detect(const char *cfg_agent, char **def_out)
 				def = g_strdup(name);
 		}
 	}
-	/* Choix explicite mais binaire absent : repli sur le premier. */
+	/* Explicit choice but missing binary: fall back to the first. */
 	if (!def && found->len > 0)
 		def = g_strdup(g_ptr_array_index(found, 0));
 	g_ptr_array_add(found, NULL);
@@ -135,7 +135,7 @@ tazterm_ai_save_capture(GtkWidget *win, const char *text,
 		g_free(path);
 		return NULL;
 	}
-	/* Log fait par l'appelant (fenetre) pour eviter les doublons. */
+	/* Logged by the caller (window) to avoid duplicates. */
 	return path;
 }
 
@@ -174,7 +174,7 @@ tazterm_ai_explain(GtkWidget *win, VteTerminal *term, int nlines)
 		g_free(path);
 		path = NULL;
 	}
-	/* Log fait par l'appelant (fenetre) pour eviter les doublons. */
+	/* Logged by the caller (window) to avoid duplicates. */
 	g_string_free(prompt, TRUE);
 
 	(void) win;

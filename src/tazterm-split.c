@@ -1,14 +1,14 @@
-/* tazterm-split.c — E3: arbre binaire de GtkPaned, feuilles = terminaux.
+/* tazterm-split.c — Binary GtkPaned tree, leaves = terminals.
  *
- * Structure : racine GtkBox -> (GtkPaned -> (feuille | paned))*.
- * Feuille = GtkEventBox.classe(tazterm-pane[,-focused]) + VteTerminal.
- * Le collapse remplace un paned a enfant unique par son survivant.
+ * Layout: root GtkBox -> (GtkPaned -> (leaf | paned))*.
+ * Leaf = GtkEventBox.class(tazterm-pane[,-focused]) + VteTerminal.
+ * Collapse replaces a single-child paned with its survivor.
  */
 #include "tazterm-split.h"
 #include "tazterm-term.h"
 
 typedef struct {
-	TaztermConfig *cfg; /* non possede (vie de l'appli) */
+	TaztermConfig *cfg; /* not owned (app lifetime) */
 	char *shell_override;
 	char *workdir_override;
 	TaztermSplitHooks hooks;
@@ -62,7 +62,7 @@ leaf_set_focused(GtkWidget *leaf, gboolean focused)
 		gtk_style_context_remove_class(ctx, "tazterm-pane-focused");
 }
 
-/* --- feuilles ----------------------------------------------------------- */
+/* --- leaves ------------------------------------------------------------ */
 
 static gboolean
 on_term_focus_in(GtkWidget *term, GdkEventFocus *event, gpointer data)
@@ -89,7 +89,7 @@ on_term_focus_in(GtkWidget *term, GdkEventFocus *event, gpointer data)
 	return FALSE;
 }
 
-/* La feuille d'un terminal = son parent direct (EventBox marquee). */
+/* A terminal's leaf = its direct parent (marked EventBox). */
 static GtkWidget *
 leaf_of(VteTerminal *term)
 {
@@ -104,7 +104,8 @@ leaf_of(VteTerminal *term)
 }
 
 static GtkWidget *
-leaf_new(Split *sp, GtkWidget *split, const char *command)
+leaf_new(Split *sp, GtkWidget *split, const char *command,
+    const char *workdir)
 {
 	GtkWidget *leaf;
 	VteTerminal *term;
@@ -114,8 +115,10 @@ leaf_new(Split *sp, GtkWidget *split, const char *command)
 	    gtk_widget_get_style_context(leaf), "tazterm-pane");
 	gtk_event_box_set_visible_window(GTK_EVENT_BOX(leaf), FALSE);
 
+	/* workdir != NULL: inherit the active pane (split).
+	 * NULL: overrides > config > $HOME fallback (initial pane). */
 	term = tazterm_term_new_cmd(sp->cfg, sp->shell_override,
-	    sp->workdir_override, command);
+	    workdir ? workdir : sp->workdir_override, command);
 	g_object_set_data(G_OBJECT(term), "tazterm-in-tree",
 	    GINT_TO_POINTER(TRUE));
 	g_signal_connect(term, "focus-in-event",
@@ -127,7 +130,7 @@ leaf_new(Split *sp, GtkWidget *split, const char *command)
 	return leaf;
 }
 
-/* --- parcours ------------------------------------------------------------- */
+/* --- walk --------------------------------------------------------------- */
 
 static void
 collect_terms(GtkWidget *w, GPtrArray *out)
@@ -146,7 +149,7 @@ collect_terms(GtkWidget *w, GPtrArray *out)
 	g_list_free(children);
 }
 
-/* Premier terminal du sous-arbre (pour le focus apres collapse). */
+/* First terminal of the subtree (focus after collapse). */
 static VteTerminal *
 first_term(GtkWidget *w)
 {
@@ -205,7 +208,7 @@ tazterm_split_new(TaztermConfig *cfg,
 	g_object_set_data_full(G_OBJECT(sp->root), "tazterm-split", sp,
 	    split_free);
 
-	leaf = leaf_new(sp, sp->root, NULL);
+	leaf = leaf_new(sp, sp->root, NULL, NULL);
 	gtk_box_pack_start(GTK_BOX(sp->root), leaf, TRUE, TRUE, 0);
 
 	sp->active = VTE_TERMINAL(gtk_bin_get_child(GTK_BIN(leaf)));
@@ -254,7 +257,17 @@ split_current(GtkWidget *split, GtkOrientation orientation,
 	parent = gtk_widget_get_parent(leaf);
 
 	paned = gtk_paned_new(orientation);
-	newleaf = leaf_new(sp, split, command);
+	/* The new pane inherits the active pane's cwd
+	 * (fallback: overrides > config > $HOME when unknown). */
+	{
+		char *cwd = tazterm_term_get_cwd(sp->active);
+
+		newleaf = leaf_new(sp, split, command, cwd);
+		if (tazterm_debug())
+			g_printerr("tazterm: split pane cwd='%s'\n",
+			    cwd ? cwd : "(default)");
+		g_free(cwd);
+	}
 
 	g_object_ref(leaf);
 	if (GTK_IS_BOX(parent)) {
@@ -285,7 +298,7 @@ split_current(GtkWidget *split, GtkOrientation orientation,
 	gtk_paned_pack2(GTK_PANED(paned), newleaf, TRUE, FALSE);
 	gtk_widget_show_all(paned);
 
-	/* Equilibre a moitie des que l'allocation est connue. */
+	/* Balance at half once the allocation is known. */
 	g_idle_add(balance_idle, g_object_ref(paned));
 
 	sp->active = VTE_TERMINAL(gtk_bin_get_child(GTK_BIN(newleaf)));
@@ -305,14 +318,14 @@ split_current(GtkWidget *split, GtkOrientation orientation,
 void
 tazterm_split_vertical(GtkWidget *split)
 {
-	/* Panneaux cote a cote = paned horizontal. */
+	/* Side-by-side panes = horizontal paned. */
 	split_current(split, GTK_ORIENTATION_HORIZONTAL, NULL);
 }
 
 void
 tazterm_split_horizontal(GtkWidget *split)
 {
-	/* Panneaux empiles = paned vertical. */
+	/* Stacked panes = vertical paned. */
 	split_current(split, GTK_ORIENTATION_VERTICAL, NULL);
 }
 
@@ -340,8 +353,8 @@ tazterm_split_remove_term(GtkWidget *split, VteTerminal *term)
 	    GINT_TO_POINTER(FALSE));
 
 	if (parent == split) {
-		/* Dernier panneau : destroy() se desparente seul, ne pas
-		 * container_remove() avant (double dispose). */
+		/* Last pane: destroy() unparents itself, never
+		 * container_remove() first (double dispose). */
 		gtk_widget_destroy(leaf);
 		sp->active = NULL;
 		if (tazterm_debug())
@@ -352,7 +365,7 @@ tazterm_split_remove_term(GtkWidget *split, VteTerminal *term)
 	}
 
 	if (!GTK_IS_PANED(parent)) {
-		/* Ne devrait pas arriver (racine ou paned uniquement). */
+		/* Should not happen (root or paned only). */
 		gtk_widget_destroy(leaf);
 		return;
 	}
@@ -363,7 +376,7 @@ tazterm_split_remove_term(GtkWidget *split, VteTerminal *term)
 		sibling = gtk_paned_get_child1(GTK_PANED(parent));
 
 	if (!sibling) {
-		/* Invariant brise (paned a enfant unique) : on nettoie. */
+		/* Broken invariant (single-child paned): clean up. */
 		g_warning("tazterm: paned with single child");
 		gtk_widget_destroy(leaf);
 		gtk_widget_destroy(parent);
@@ -373,8 +386,8 @@ tazterm_split_remove_term(GtkWidget *split, VteTerminal *term)
 		GtkWidget *gp;
 
 		focus = first_term(sibling);
-		/* Capture la place AVANT de detruire : destroy() se
-		 * desparente seul, remove() + destroy() = double dispose. */
+		/* Capture the slot BEFORE destroying: destroy() unparents
+		 * itself, remove() + destroy() = double dispose. */
 		gp = gtk_widget_get_parent(parent);
 		if (GTK_IS_PANED(gp) &&
 		    gtk_paned_get_child1(GTK_PANED(gp)) == parent)
@@ -384,10 +397,10 @@ tazterm_split_remove_term(GtkWidget *split, VteTerminal *term)
 
 		g_object_ref(sibling);
 		gtk_container_remove(GTK_CONTAINER(parent), sibling);
-		gtk_widget_destroy(leaf);   /* tue le shell */
-		gtk_widget_destroy(parent); /* vide, se desparente seul */
+		gtk_widget_destroy(leaf);   /* kills the shell */
+		gtk_widget_destroy(parent); /* empty, unparents itself */
 
-		/* Remonte le survivant a la place du paned. */
+		/* Lift the survivor where the paned was. */
 		if (gp == split) {
 			gtk_box_pack_start(GTK_BOX(gp), sibling, TRUE,
 			    TRUE, 0);

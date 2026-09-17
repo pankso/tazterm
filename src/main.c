@@ -1,6 +1,6 @@
-/* main.c — E2: options --working-directory / --shell / --version.
- * Precedence shell : --shell > TAZTERM_SHELL > config > /bin/sh.
- * Precedence dossier : --working-directory > config > $HOME. */
+/* main.c — Options --working-directory / --shell / --version.
+ * Shell precedence: --shell > TAZTERM_SHELL > config > /bin/sh.
+ * Directory precedence: --working-directory > config > $HOME. */
 #include <gtk/gtk.h>
 #include <stdlib.h>
 #include <locale.h>
@@ -41,8 +41,8 @@ main(int argc, char *argv[])
 		{ NULL }
 	};
 
-	/* SliTaz n'a pas de bus accessibilite : coupe le pont at-spi pour
-	 * eviter le warning "Couldn't connect to accessibility bus". */
+	/* SliTaz has no accessibility bus: cut the at-spi bridge to avoid
+	 * the "Couldn't connect to accessibility bus" warning. */
 	setenv("NO_AT_BRIDGE", "1", 0);
 
 	setlocale(LC_ALL, "");

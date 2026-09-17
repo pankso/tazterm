@@ -1,4 +1,4 @@
-/* tazterm-config.h — E2: configuration ~/.config/tazterm/tazterm.conf. */
+/* tazterm-config.h — ~/.config/tazterm/tazterm.conf configuration. */
 #ifndef TAZTERM_CONFIG_H
 #define TAZTERM_CONFIG_H
 
@@ -7,26 +7,26 @@
 G_BEGIN_DECLS
 
 typedef struct {
-	char *font_desc;   /* ex. "Monospace 10" */
-	char *shell;       /* defaut : /bin/sh (BusyBox ash) */
+	char *font_desc;   /* e.g. "Monospace 10" */
+	char *shell;       /* default: /bin/sh (BusyBox ash) */
 	char *workdir;     /* NULL = $HOME */
-	long scrollback;   /* lignes, defaut 10000 */
+	long scrollback;   /* lines, default 10000 */
 	GdkRGBA foreground;
 	GdkRGBA background;
 	gboolean fg_set;
 	gboolean bg_set;
-	char *ai_agent;    /* "auto" ou opencode|claude|navette */
-	int ai_explain_lines;  /* defaut 200 */
-	int ai_capture_lines;  /* defaut 2000 */
+	char *ai_agent;    /* "auto" or opencode|claude|navette */
+	int ai_explain_lines;  /* default 200 */
+	int ai_capture_lines;  /* default 2000 */
 } TaztermConfig;
 
-/* Charge la config (fichier cree avec les defauts s'il manque).
- * Ne retourne jamais NULL (defauts en cas d'echec). */
+/* Load the config (file created with defaults when missing).
+ * Never returns NULL (defaults on failure). */
 TaztermConfig *tazterm_config_load(void);
 
 void tazterm_config_free(TaztermConfig *cfg);
 
-/* Chemin du fichier de config (a liberer avec g_free). */
+/* Config file path (free with g_free). */
 char *tazterm_config_path(void);
 
 G_END_DECLS

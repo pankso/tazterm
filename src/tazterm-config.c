@@ -1,6 +1,6 @@
-/* tazterm-config.c — E2: GKeyFile, groupe [terminal].
+/* tazterm-config.c — GKeyFile, [terminal] and [ai] groups.
  *
- * Fichier : ~/.config/tazterm/tazterm.conf
+ * File: ~/.config/tazterm/tazterm.conf
  *   [terminal]
  *   font=Monospace 10
  *   shell=/bin/sh
@@ -8,6 +8,10 @@
  *   foreground=#e6e8ed
  *   background=#1c1e22
  *   working_directory=/home/tux
+ *   [ai]
+ *   agent=auto
+ *   explain_lines=200
+ *   capture_lines=2000
  */
 #include "tazterm-config.h"
 
@@ -74,7 +78,7 @@ tazterm_config_load(void)
 	path = tazterm_config_path();
 	kf = g_key_file_new();
 	if (!g_key_file_load_from_file(kf, path, G_KEY_FILE_NONE, &err)) {
-		/* Pas de config : on la cree avec les defauts. */
+		/* No config: create it with defaults. */
 		g_clear_error(&err);
 		config_save_defaults(path, cfg);
 		g_free(path);

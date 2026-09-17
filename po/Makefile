@@ -1,4 +1,4 @@
-# po/Makefile — modèle lxtaz : le .pot est généré, jamais commité.
+# po/Makefile — lxtaz pattern: the .pot is generated, never committed.
 GETTEXT_PACKAGE ?= tazterm
 PREFIX ?= /usr
 LOCALEDIR ?= $(PREFIX)/share/locale

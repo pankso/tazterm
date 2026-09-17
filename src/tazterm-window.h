@@ -1,4 +1,4 @@
-/* tazterm-window.h — E3: fenetre + split + recherche + menu + zoom. */
+/* tazterm-window.h — Main window + split + search + menu + zoom. */
 #ifndef TAZTERM_WINDOW_H
 #define TAZTERM_WINDOW_H
 
