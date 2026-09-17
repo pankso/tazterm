@@ -32,6 +32,7 @@ typedef struct {
 	GtkWidget *search_entry;
 	char **agents;      /* detectes au PATH (g_strfreev) */
 	char *agent;        /* defaut (g_free, NULL si aucun) */
+	gboolean fullscreen;
 } TaztermWin;
 
 static void
@@ -215,6 +216,43 @@ on_close_pane(GtkMenuItem *item, gpointer data)
 
 	(void) item;
 	tazterm_split_close_current(tw->split);
+}
+
+static void
+fullscreen_set(TaztermWin *tw, gboolean full)
+{
+	tw->fullscreen = full;
+	if (full)
+		gtk_window_fullscreen(GTK_WINDOW(tw->win));
+	else
+		gtk_window_unfullscreen(GTK_WINDOW(tw->win));
+	if (tazterm_debug())
+		g_printerr("tazterm: fullscreen %s\n",
+		    full ? "on" : "off");
+}
+
+static void
+on_fullscreen(GtkMenuItem *item, gpointer data)
+{
+	TaztermWin *tw = TW(data);
+
+	(void) item;
+	fullscreen_set(tw, !tw->fullscreen);
+}
+
+/* Suit aussi les changements externes (ex. Openbox, EWMH). */
+static gboolean
+on_window_state(GtkWidget *widget, GdkEventWindowState *event,
+    gpointer data)
+{
+	TaztermWin *tw = TW(data);
+
+	(void) widget;
+	if (event->changed_mask & GDK_WINDOW_STATE_FULLSCREEN)
+		tw->fullscreen =
+		    (event->new_window_state &
+		    GDK_WINDOW_STATE_FULLSCREEN) != 0;
+	return FALSE;
 }
 
 /* --- actions IA (E4) -------------------------------------------------------- */
@@ -404,6 +442,18 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 	menu_add(menu, _("Zoom arrière"), G_CALLBACK(on_zoom_out), term);
 	menu_add(menu, _("Taille normale"), G_CALLBACK(on_zoom_reset),
 	    term);
+	sep = gtk_separator_menu_item_new();
+	gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
+	{
+		GtkWidget *fs;
+
+		fs = gtk_check_menu_item_new_with_label(_("Plein écran"));
+		gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(fs),
+		    tw->fullscreen);
+		g_signal_connect(fs, "activate", G_CALLBACK(on_fullscreen),
+		    tw);
+		gtk_menu_shell_append(GTK_MENU_SHELL(menu), fs);
+	}
 
 	gtk_widget_show_all(menu);
 	gtk_menu_popup_at_pointer(GTK_MENU(menu), (GdkEvent *) event);
@@ -445,6 +495,12 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 	if (!ctrl && !alt && event->keyval == GDK_KEY_Escape &&
 	    search_is_shown(tw)) {
 		search_hide(tw);
+		return TRUE;
+	}
+
+	/* F11 : plein écran (sans modificateur, comme les terminaux usuels). */
+	if (!ctrl && !alt && !shift && event->keyval == GDK_KEY_F11) {
+		fullscreen_set(tw, !tw->fullscreen);
 		return TRUE;
 	}
 
@@ -635,6 +691,8 @@ tazterm_window_new(TaztermConfig *cfg,
 	gtk_window_set_title(GTK_WINDOW(tw->win), "TazTerm");
 	gtk_window_set_default_size(GTK_WINDOW(tw->win), 900, 600);
 	g_signal_connect(tw->win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+	g_signal_connect(tw->win, "window-state-event",
+	    G_CALLBACK(on_window_state), tw);
 
 	box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_container_add(GTK_CONTAINER(tw->win), box);

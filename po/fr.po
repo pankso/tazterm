@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tazterm\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-17 02:47+0200\n"
+"POT-Creation-Date: 2026-09-17 02:59+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: SliTaz Contributors\n"
 "Language-Team: French\n"
@@ -18,63 +18,67 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 
-#: src/tazterm-window.c:356
+#: src/tazterm-window.c:394
 msgid "Copier"
 msgstr "Copier"
 
-#: src/tazterm-window.c:357
+#: src/tazterm-window.c:395
 msgid "Coller"
 msgstr "Coller"
 
-#: src/tazterm-window.c:358
+#: src/tazterm-window.c:396
 msgid "Tout sélectionner"
 msgstr "Tout sélectionner"
 
-#: src/tazterm-window.c:362
+#: src/tazterm-window.c:400
 msgid "Rechercher…"
 msgstr "Rechercher…"
 
-#: src/tazterm-window.c:365
+#: src/tazterm-window.c:403
 msgid "Diviser côté à côté"
 msgstr "Diviser côté à côté"
 
-#: src/tazterm-window.c:367
+#: src/tazterm-window.c:405
 msgid "Diviser empilés"
 msgstr "Diviser empilés"
 
-#: src/tazterm-window.c:368
+#: src/tazterm-window.c:406
 msgid "Fermer ce panneau"
 msgstr "Fermer ce panneau"
 
-#: src/tazterm-window.c:378
+#: src/tazterm-window.c:416
 #, c-format
 msgid "Ouvrir un split agent (%s)"
 msgstr "Ouvrir un split agent (%s)"
 
-#: src/tazterm-window.c:389
+#: src/tazterm-window.c:427
 #, c-format
 msgid "Split agent : %s"
 msgstr "Split agent : %s"
 
-#: src/tazterm-window.c:397
+#: src/tazterm-window.c:435
 msgid "Copier le scrollback"
 msgstr "Copier le scrollback"
 
-#: src/tazterm-window.c:399
+#: src/tazterm-window.c:437
 msgid "Expliquer la dernière erreur"
 msgstr "Expliquer la dernière erreur"
 
-#: src/tazterm-window.c:403
+#: src/tazterm-window.c:441
 msgid "Zoom avant"
 msgstr "Zoom avant"
 
-#: src/tazterm-window.c:404
+#: src/tazterm-window.c:442
 msgid "Zoom arrière"
 msgstr "Zoom arrière"
 
-#: src/tazterm-window.c:405
+#: src/tazterm-window.c:443
 msgid "Taille normale"
 msgstr "Taille normale"
+
+#: src/tazterm-window.c:450
+msgid "Plein écran"
+msgstr "Plein écran"
 
 #: src/main.c:34
 msgid "Dossier de demarrage du shell"

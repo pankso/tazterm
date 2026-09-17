@@ -30,6 +30,7 @@ cd src && make && ./tazterm
 - `Ctrl+Shift+W` : fermer le panneau courant (dernier → quitte)
 - `Alt+Flèches` : focus au panneau voisin (bordure bleue = actif)
 - `Ctrl+Shift+F` : afficher / masquer la recherche (suit le panneau actif)
+- `F11` ou clic droit → `Plein écran` : basculer le plein écran
 - `Ctrl+Shift+A` : ouvrir un split agent IA (agent par défaut)
 - Clic droit → `Ouvrir un split agent (…)` : défaut, ou `Split agent : claude`
   / `Split agent : navette` pour les autres agents détectés
