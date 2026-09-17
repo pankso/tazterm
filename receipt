@@ -1,0 +1,48 @@
+# SliTaz package receipt for tazterm.
+
+PACKAGE="tazterm"
+VERSION="0.5"
+CATEGORY="x-window"
+SHORT_DESC="GTK3/VTE terminal with splits and AI-friendly output capture."
+MAINTAINER="pankso@slitaz.org"
+LICENSE="GPL3"
+TARBALL="$PACKAGE-$VERSION.tar.gz"
+WEB_SITE="https://www.slitaz.org/"
+WGET_URL="https://www.slitaz.org/sources/packages/t/$TARBALL"
+
+DEPENDS="gtk+3 vte291"
+BUILD_DEPENDS="gtk+3-dev vte291-dev pkg-config gettext-tools"
+
+# Rules to configure and make the package.
+compile_rules()
+{
+	cd $src/src
+	make
+	cd ../po
+	make
+}
+
+# Rules to gen a SliTaz package suitable for Tazpkg.
+genpkg_rules()
+{
+	mkdir -p $fs/usr/bin $fs/usr/share/applications
+	mkdir -p $fs/usr/share/icons/hicolor/scalable/apps
+	cp -a $src/src/tazterm			$fs/usr/bin
+	cp -a $src/data/tazterm.desktop	$fs/usr/share/applications
+	cp -a $src/data/icons/hicolor/scalable/apps/tazterm.svg \
+							$fs/usr/share/icons/hicolor/scalable/apps
+	# Raster fallbacks (lxpanel/GTK2 renders PNG reliably)
+	for s in 22 24 32 48; do
+		mkdir -p $fs/usr/share/icons/hicolor/${s}x${s}/apps
+		cp -a $src/data/icons/hicolor/${s}x${s}/apps/tazterm.png \
+							$fs/usr/share/icons/hicolor/${s}x${s}/apps
+	done
+	# Compiled translations (po/LINGUAS drives the language list)
+	make -C $src/po install DESTDIR=$fs PREFIX=/usr
+}
+
+post_install()
+{
+	gtk-update-icon-cache -q -t -f usr/share/icons/hicolor 2>/dev/null
+	true
+}

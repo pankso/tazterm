@@ -1,0 +1,6 @@
+*.o
+src/tazterm
+*.pot
+*~
+*.orig
+*.rej

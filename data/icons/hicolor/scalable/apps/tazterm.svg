@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TazTerm icon, own art: dark Slitaz terminal tile, orange prompt,
+     split bar hinting at panes. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <rect x="2" y="4" width="44" height="40" rx="6" fill="#1c1e22"/>
+  <rect x="2" y="4" width="44" height="40" rx="6" fill="none" stroke="#3a3d44" stroke-width="2"/>
+  <rect x="23" y="8" width="2" height="32" fill="#3a3d44"/>
+  <text x="7" y="30" font-family="monospace" font-size="14" font-weight="bold" fill="#d45500">&gt;_</text>
+  <circle cx="38" cy="14" r="3" fill="#78a348"/>
+</svg>

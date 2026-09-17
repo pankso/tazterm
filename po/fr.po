@@ -1,0 +1,101 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the tazterm package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: tazterm\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-17 02:47+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: SliTaz Contributors\n"
+"Language-Team: French\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+
+#: src/tazterm-window.c:356
+msgid "Copier"
+msgstr "Copier"
+
+#: src/tazterm-window.c:357
+msgid "Coller"
+msgstr "Coller"
+
+#: src/tazterm-window.c:358
+msgid "Tout sélectionner"
+msgstr "Tout sélectionner"
+
+#: src/tazterm-window.c:362
+msgid "Rechercher…"
+msgstr "Rechercher…"
+
+#: src/tazterm-window.c:365
+msgid "Diviser côté à côté"
+msgstr "Diviser côté à côté"
+
+#: src/tazterm-window.c:367
+msgid "Diviser empilés"
+msgstr "Diviser empilés"
+
+#: src/tazterm-window.c:368
+msgid "Fermer ce panneau"
+msgstr "Fermer ce panneau"
+
+#: src/tazterm-window.c:378
+#, c-format
+msgid "Ouvrir un split agent (%s)"
+msgstr "Ouvrir un split agent (%s)"
+
+#: src/tazterm-window.c:389
+#, c-format
+msgid "Split agent : %s"
+msgstr "Split agent : %s"
+
+#: src/tazterm-window.c:397
+msgid "Copier le scrollback"
+msgstr "Copier le scrollback"
+
+#: src/tazterm-window.c:399
+msgid "Expliquer la dernière erreur"
+msgstr "Expliquer la dernière erreur"
+
+#: src/tazterm-window.c:403
+msgid "Zoom avant"
+msgstr "Zoom avant"
+
+#: src/tazterm-window.c:404
+msgid "Zoom arrière"
+msgstr "Zoom arrière"
+
+#: src/tazterm-window.c:405
+msgid "Taille normale"
+msgstr "Taille normale"
+
+#: src/main.c:34
+msgid "Dossier de demarrage du shell"
+msgstr "Dossier de demarrage du shell"
+
+#: src/main.c:35
+msgid "DOSSIER"
+msgstr "DOSSIER"
+
+#: src/main.c:37
+msgid "Shell a lancer (defaut : /bin/sh)"
+msgstr "Shell a lancer (defaut : /bin/sh)"
+
+#: src/main.c:38
+msgid "SHELL"
+msgstr "SHELL"
+
+#: src/main.c:40
+msgid "Afficher la version"
+msgstr "Afficher la version"
+
+#: src/main.c:53
+msgid "- terminal leger GTK3/VTE"
+msgstr "- terminal leger GTK3/VTE"
