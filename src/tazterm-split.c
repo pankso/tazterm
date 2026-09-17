@@ -14,6 +14,7 @@ typedef struct {
 	TaztermSplitHooks hooks;
 	GtkWidget *root;
 	VteTerminal *active;
+	gdouble font_scale; /* window-wide zoom, inherited by new panes */
 } Split;
 
 #define SPLIT(w) ((Split *) g_object_get_data(G_OBJECT(w), "tazterm-split"))
@@ -35,15 +36,17 @@ css_ensure(void)
 {
 	static gboolean done = FALSE;
 	GtkCssProvider *css;
-	const char *rules =
-	    ".tazterm-pane { border: 2px solid transparent; }"
-	    ".tazterm-pane-focused { border: 2px solid #4a90d9; }";
 
 	if (done)
 		return;
 	done = TRUE;
 	css = gtk_css_provider_new();
-	gtk_css_provider_load_from_data(css, rules, -1, NULL);
+	/* outline (not border): no layout impact, so focusing a pane
+	 * never resizes its VTE (no SIGWINCH storm for ncurses apps). */
+	gtk_css_provider_load_from_data(css,
+	    ".tazterm-pane { outline: 2px solid transparent; outline-offset: -2px; }"
+	    ".tazterm-pane-focused { outline-color: #4a90d9; }",
+	    -1, NULL);
 	gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),
 	    GTK_STYLE_PROVIDER(css),
 	    GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
@@ -119,6 +122,7 @@ leaf_new(Split *sp, GtkWidget *split, const char *command,
 	 * NULL: overrides > config > $HOME fallback (initial pane). */
 	term = tazterm_term_new_cmd(sp->cfg, sp->shell_override,
 	    workdir ? workdir : sp->workdir_override, command);
+	vte_terminal_set_font_scale(term, sp->font_scale);
 	g_object_set_data(G_OBJECT(term), "tazterm-in-tree",
 	    GINT_TO_POINTER(TRUE));
 	g_signal_connect(term, "focus-in-event",
@@ -185,6 +189,64 @@ balance_idle(gpointer data)
 	return FALSE;
 }
 
+/* --- zoom (window-wide, inherited by new panes) ---------------------------- */
+
+#define TAZTERM_ZOOM_STEP 0.1
+#define TAZTERM_ZOOM_MIN 0.5
+#define TAZTERM_ZOOM_MAX 3.0
+
+static void
+zoom_apply(GtkWidget *split, gdouble scale)
+{
+	Split *sp = SPLIT(split);
+	GPtrArray *arr;
+	guint i;
+
+	if (scale < TAZTERM_ZOOM_MIN)
+		scale = TAZTERM_ZOOM_MIN;
+	if (scale > TAZTERM_ZOOM_MAX)
+		scale = TAZTERM_ZOOM_MAX;
+	sp->font_scale = scale;
+
+	arr = g_ptr_array_new();
+	collect_terms(split, arr);
+	for (i = 0; i < arr->len; i++)
+		vte_terminal_set_font_scale(
+		    VTE_TERMINAL(g_ptr_array_index(arr, i)), scale);
+	if (tazterm_debug())
+		g_printerr("tazterm: zoom scale=%.2f (%u panes)\n", scale,
+		    arr->len);
+	g_ptr_array_free(arr, TRUE);
+}
+
+void
+tazterm_split_zoom_in(GtkWidget *split)
+{
+	Split *sp = SPLIT(split);
+
+	zoom_apply(split, sp->font_scale + TAZTERM_ZOOM_STEP);
+}
+
+void
+tazterm_split_zoom_out(GtkWidget *split)
+{
+	Split *sp = SPLIT(split);
+
+	zoom_apply(split, sp->font_scale - TAZTERM_ZOOM_STEP);
+}
+
+void
+tazterm_split_zoom_reset(GtkWidget *split)
+{
+	zoom_apply(split, 1.0);
+}
+
+gdouble
+tazterm_split_get_scale(GtkWidget *split)
+{
+	return SPLIT(split)->font_scale;
+}
+
 /* --- API ---------------------------------------------------------------------- */
 
 GtkWidget *
@@ -199,6 +261,7 @@ tazterm_split_new(TaztermConfig *cfg,
 
 	sp = g_new0(Split, 1);
 	sp->cfg = cfg;
+	sp->font_scale = 1.0;
 	sp->shell_override = g_strdup(shell_override);
 	sp->workdir_override = g_strdup(workdir_override);
 	if (hooks)

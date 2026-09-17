@@ -63,6 +63,13 @@ void tazterm_split_close_current(GtkWidget *split);
 /* Move focus to the neighbor pane in the given direction. */
 void tazterm_split_focus_dir(GtkWidget *split, TaztermDirection dir);
 
+/* Window-wide zoom: applies to every pane and is inherited by new
+ * panes (unlike per-terminal scale). */
+void tazterm_split_zoom_in(GtkWidget *split);
+void tazterm_split_zoom_out(GtkWidget *split);
+void tazterm_split_zoom_reset(GtkWidget *split);
+gdouble tazterm_split_get_scale(GtkWidget *split);
+
 G_END_DECLS
 
 #endif /* TAZTERM_SPLIT_H */

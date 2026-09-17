@@ -23,6 +23,8 @@
 
 #include <gdk/gdkkeysyms.h>
 #include <glib/gi18n.h>
+#include <glib-unix.h>
+#include <signal.h>
 
 typedef struct {
 	GtkWidget *win;
@@ -46,6 +48,34 @@ win_free(gpointer data)
 }
 
 #define TW(x) ((TaztermWin *) (x))
+
+/* Debug aid: SIGUSR1 dumps the active pane's text (headless rendering
+ * checks). Single-window app: global is fine. */
+static TaztermWin *debug_win = NULL;
+
+static gboolean
+on_sigusr1(gpointer data)
+{
+	TaztermWin *tw = debug_win;
+	VteTerminal *term;
+	char *text;
+	char *path;
+
+	(void) data;
+	if (!tw)
+		return TRUE;
+	term = tazterm_split_active_term(tw->split);
+	if (!term)
+		return TRUE;
+	text = tazterm_term_get_visible_text(term);
+	path = g_strdup_printf("/tmp/tazterm-dump-%d.txt", (int) getpid());
+	g_file_set_contents(path, text ? text : "", -1, NULL);
+	g_printerr("tazterm: dump -> %s (%lu bytes)\n", path,
+	    (unsigned long) (text ? strlen(text) : 0));
+	g_free(text);
+	g_free(path);
+	return TRUE;
+}
 
 /* --- title -------------------------------------------------------------- */
 
@@ -174,21 +204,21 @@ static void
 on_zoom_in(GtkMenuItem *item, gpointer data)
 {
 	(void) item;
-	tazterm_term_zoom_in(VTE_TERMINAL(data));
+	tazterm_split_zoom_in(TW(data)->split);
 }
 
 static void
 on_zoom_out(GtkMenuItem *item, gpointer data)
 {
 	(void) item;
-	tazterm_term_zoom_out(VTE_TERMINAL(data));
+	tazterm_split_zoom_out(TW(data)->split);
 }
 
 static void
 on_zoom_reset(GtkMenuItem *item, gpointer data)
 {
 	(void) item;
-	tazterm_term_zoom_reset(VTE_TERMINAL(data));
+	tazterm_split_zoom_reset(TW(data)->split);
 }
 
 static void
@@ -437,10 +467,10 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 	    G_CALLBACK(on_explain), tw);
 	sep = gtk_separator_menu_item_new();
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
-	menu_add(menu, _("Zoom avant"), G_CALLBACK(on_zoom_in), term);
-	menu_add(menu, _("Zoom arrière"), G_CALLBACK(on_zoom_out), term);
+	menu_add(menu, _("Zoom avant"), G_CALLBACK(on_zoom_in), tw);
+	menu_add(menu, _("Zoom arrière"), G_CALLBACK(on_zoom_out), tw);
 	menu_add(menu, _("Taille normale"), G_CALLBACK(on_zoom_reset),
-	    term);
+	    tw);
 	sep = gtk_separator_menu_item_new();
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
 	{
@@ -584,15 +614,15 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 		case GDK_KEY_plus:
 		case GDK_KEY_KP_Add:
 		case GDK_KEY_equal: /* '+' without Shift on some layouts */
-			tazterm_term_zoom_in(term);
+			tazterm_split_zoom_in(tw->split);
 			return TRUE;
 		case GDK_KEY_minus:
 		case GDK_KEY_KP_Subtract:
-			tazterm_term_zoom_out(term);
+			tazterm_split_zoom_out(tw->split);
 			return TRUE;
 		case GDK_KEY_0:
 		case GDK_KEY_KP_0:
-			tazterm_term_zoom_reset(term);
+			tazterm_split_zoom_reset(tw->split);
 			return TRUE;
 		default:
 			break;
@@ -720,6 +750,9 @@ tazterm_window_new(TaztermConfig *cfg,
 
 	/* State attached to the window, freed on destroy. */
 	g_object_set_data_full(G_OBJECT(tw->win), "tazterm-win", tw, win_free);
+
+	debug_win = tw;
+	g_unix_signal_add(SIGUSR1, on_sigusr1, NULL);
 
 	return tw->win;
 }
