@@ -14,10 +14,24 @@
  *   capture_lines=2000
  */
 #include "tazterm-config.h"
+#include "tazterm-term.h"
 
 #define TAZTERM_DEFAULT_FONT "Monospace 12"
 #define TAZTERM_DEFAULT_SHELL "/bin/sh"
 #define TAZTERM_DEFAULT_SCROLLBACK 10000
+
+/* Config values come from a user-writable file: cap lengths so a
+ * bloated entry cannot balloon memory. Over-long = rejected
+ * (keep default), not truncated (a cut path would mislead). */
+#define TAZTERM_MAX_FONT 256
+#define TAZTERM_MAX_PATH 4096
+#define TAZTERM_MAX_AGENT 64
+
+static gboolean
+overlong(const char *s, gsize max)
+{
+	return s && strlen(s) > max;
+}
 
 char *
 tazterm_config_path(void)
@@ -49,7 +63,10 @@ config_save_defaults(const char *path, TaztermConfig *cfg)
 
 	data = g_key_file_to_data(kf, &len, NULL);
 	if (data) {
-		g_file_set_contents(path, data, (gssize) len, NULL);
+		/* Fresh file in the user's own config dir; NOFOLLOW so a
+		 * planted symlink cannot redirect the write elsewhere. */
+		tazterm_write_file_nofollow(path, data, (gssize) len,
+		    0644);
 		g_free(data);
 	}
 	g_key_file_free(kf);
@@ -88,7 +105,7 @@ tazterm_config_load(void)
 	g_free(path);
 
 	s = g_key_file_get_string(kf, "terminal", "font", NULL);
-	if (s && *s) {
+	if (s && *s && !overlong(s, TAZTERM_MAX_FONT)) {
 		g_free(cfg->font_desc);
 		cfg->font_desc = s;
 	} else {
@@ -96,7 +113,7 @@ tazterm_config_load(void)
 	}
 
 	s = g_key_file_get_string(kf, "terminal", "shell", NULL);
-	if (s && *s) {
+	if (s && *s && !overlong(s, TAZTERM_MAX_PATH)) {
 		g_free(cfg->shell);
 		cfg->shell = s;
 	} else {
@@ -104,7 +121,7 @@ tazterm_config_load(void)
 	}
 
 	s = g_key_file_get_string(kf, "terminal", "working_directory", NULL);
-	if (s && *s) {
+	if (s && *s && !overlong(s, TAZTERM_MAX_PATH)) {
 		cfg->workdir = s;
 	} else {
 		g_free(s);
@@ -130,7 +147,7 @@ tazterm_config_load(void)
 	g_free(s);
 
 	s = g_key_file_get_string(kf, "ai", "agent", NULL);
-	if (s && *s) {
+	if (s && *s && !overlong(s, TAZTERM_MAX_AGENT)) {
 		g_free(cfg->ai_agent);
 		cfg->ai_agent = s;
 	} else {
@@ -152,6 +169,8 @@ tazterm_config_load(void)
 		    NULL);
 	if (cfg->ai_capture_lines < 10)
 		cfg->ai_capture_lines = 10;
+	if (cfg->ai_capture_lines > 100000)
+		cfg->ai_capture_lines = 100000;
 
 	g_key_file_free(kf);
 	return cfg;

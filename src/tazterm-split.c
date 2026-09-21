@@ -545,8 +545,11 @@ tazterm_split_focus_dir(GtkWidget *split, TaztermDirection dir)
 		return;
 	}
 
-	gtk_widget_translate_coordinates(GTK_WIDGET(sp->active), toplevel,
-	    0, 0, &ax, &ay);
+	if (!gtk_widget_translate_coordinates(GTK_WIDGET(sp->active),
+	    toplevel, 0, 0, &ax, &ay)) {
+		g_ptr_array_free(arr, TRUE);
+		return;
+	}
 	aw = (guint) gtk_widget_get_allocated_width(
 	    GTK_WIDGET(sp->active));
 	ah = (guint) gtk_widget_get_allocated_height(
@@ -561,8 +564,13 @@ tazterm_split_focus_dir(GtkWidget *split, TaztermDirection dir)
 
 		if (t == GTK_WIDGET(sp->active))
 			continue;
-		gtk_widget_translate_coordinates(t, toplevel, 0, 0, &bx,
-		    &by);
+		/* Unrealized widgets have no coordinates: skip instead
+		 * of reading uninitialized values. */
+		bx = ax;
+		by = ay;
+		if (!gtk_widget_translate_coordinates(t, toplevel, 0, 0,
+		    &bx, &by))
+			continue;
 		bx += gtk_widget_get_allocated_width(t) / 2;
 		by += gtk_widget_get_allocated_height(t) / 2;
 		dx = bx - ax;

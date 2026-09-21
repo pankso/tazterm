@@ -5,6 +5,8 @@
 #include <gtk/gtk.h>
 #include <vte/vte.h>
 
+#include <sys/stat.h>
+
 #include "tazterm-config.h"
 
 G_BEGIN_DECLS
@@ -45,8 +47,17 @@ char *tazterm_term_get_selected_text(VteTerminal *term);
  * bracketed-paste, one trailing newline. FALSE if empty or too large. */
 gboolean tazterm_term_feed_paste(VteTerminal *term, const char *text);
 
+/* Manual paste from CLIPBOARD through the same sanitizer, but without
+ * the trailing newline (paste never executes by itself). */
+gboolean tazterm_term_paste_clipboard(VteTerminal *term);
+
 /* Active shell's cwd (/proc then OSC 7). Caller frees, NULL if unknown. */
 char *tazterm_term_get_cwd(VteTerminal *term);
+
+/* Write data to path without following a symlink at path (O_NOFOLLOW,
+ * ELOOP when path is a symlink: refuse). len < 0 means strlen(data). */
+gboolean tazterm_write_file_nofollow(const char *path, const char *data,
+    gssize len, mode_t mode);
 
 /* Write data to path as mode 0600 (temp+rename, does not follow a
  * symlink at path). len < 0 means strlen(data). */

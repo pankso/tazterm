@@ -92,7 +92,13 @@ title_update(TaztermWin *tw, VteTerminal *term)
 
 	title = term ? vte_terminal_get_window_title(term) : NULL;
 	if (title && *title) {
-		full = g_strdup_printf("%s - TazTerm", title);
+		/* Pty-controlled string: cap at 256 chars so a runaway
+		 * program cannot balloon the title (char count keeps
+		 * UTF-8 valid, unlike a byte cut). */
+		char *short_title = g_utf8_substring(title, 0, 256);
+
+		full = g_strdup_printf("%s - TazTerm", short_title);
+		g_free(short_title);
 		gtk_window_set_title(GTK_WINDOW(tw->win), full);
 		g_free(full);
 	} else {
@@ -188,7 +194,9 @@ static void
 on_paste(GtkMenuItem *item, gpointer data)
 {
 	(void) item;
-	vte_terminal_paste_clipboard(VTE_TERMINAL(data));
+	/* Sanitized + bracketed, no trailing newline: a hostile
+	 * clipboard can neither inject escapes nor auto-execute. */
+	tazterm_term_paste_clipboard(VTE_TERMINAL(data));
 }
 
 static void
@@ -451,14 +459,19 @@ ai_send_to_agent(TaztermWin *tw, VteTerminal *src)
 /* "Send to agent" request (clicked source pane); freed with the menu. */
 typedef struct {
 	TaztermWin *tw;
-	VteTerminal *src; /* not owned (in tree) */
+	VteTerminal *src; /* weak pointer: nulled if the pane dies */
 } SendReq;
 
 static void
 send_req_free(gpointer data, GClosure *closure)
 {
+	SendReq *req = data;
+
 	(void) closure;
-	g_free(data);
+	if (req->src)
+		g_object_remove_weak_pointer(G_OBJECT(req->src),
+		    (gpointer *) &req->src);
+	g_free(req);
 }
 
 static void
@@ -467,6 +480,9 @@ on_send_to_agent(GtkMenuItem *item, gpointer data)
 	SendReq *req = data;
 
 	(void) item;
+	/* The pane may have closed while the menu was open: weak
+	 * pointer is NULL then, and ai_send_to_agent falls back
+	 * to the active pane. */
 	ai_send_to_agent(req->tw, req->src);
 }
 
@@ -554,6 +570,8 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 		req = g_new0(SendReq, 1);
 		req->tw = tw;
 		req->src = term;
+		g_object_add_weak_pointer(G_OBJECT(term),
+		    (gpointer *) &req->src);
 		item = gtk_menu_item_new_with_label(
 		    _("Envoyer à l'agent"));
 		g_signal_connect_data(item, "activate",
@@ -667,7 +685,7 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 		case GDK_KEY_V:
 		case GDK_KEY_v:
 			if (term)
-				vte_terminal_paste_clipboard(term);
+				tazterm_term_paste_clipboard(term);
 			return TRUE;
 		case GDK_KEY_Q:
 		case GDK_KEY_q:

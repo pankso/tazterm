@@ -2,6 +2,7 @@
 #include "tazterm-term.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,50 @@ tazterm_debug(void)
 	if (cached < 0)
 		cached = g_getenv("TAZTERM_DEBUG") ? 1 : 0;
 	return cached == 1;
+}
+
+/* Write data to path without following a symlink at the final
+ * component (O_NOFOLLOW): a pre-planted symlink cannot redirect the
+ * write into another file. temp+rename is NOT used here so the target
+ * keeps its inode (config file); ELOOP means "symlink, refuse". */
+gboolean
+tazterm_write_file_nofollow(const char *path, const char *data,
+    gssize len, mode_t mode)
+{
+	int fd;
+	const char *p;
+	gsize left;
+
+	if (!path || !data)
+		return FALSE;
+	if (len < 0)
+		len = (gssize) strlen(data);
+
+	fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW,
+	    mode);
+	if (fd < 0)
+		return FALSE;
+	p = data;
+	left = (gsize) len;
+	while (left > 0) {
+		gssize n = write(fd, p, left);
+
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			close(fd);
+			return FALSE;
+		}
+		if (n == 0) {
+			close(fd);
+			return FALSE;
+		}
+		p += n;
+		left -= (gsize) n;
+	}
+	if (close(fd) < 0)
+		return FALSE;
+	return TRUE;
 }
 
 gboolean
@@ -185,8 +230,14 @@ integration_ensure(void)
 		g_mkdir_with_parents(dir, 0755);
 		g_free(dir);
 	}
-	if (g_file_set_contents(path, integration_sh, -1, NULL) &&
-	    tazterm_debug())
+	/* NOFOLLOW write: never redirect through a planted symlink. */
+	if (!tazterm_write_file_nofollow(path, integration_sh, -1, 0644)) {
+		if (tazterm_debug())
+			g_printerr("tazterm: cannot write %s\n", path);
+		g_free(path);
+		return;
+	}
+	if (tazterm_debug())
 		g_printerr("tazterm: wrote %s\n", path);
 	g_free(path);
 }
@@ -229,6 +280,29 @@ env_set_bin(char ***envv)
 	}
 }
 
+/* The binary path is embedded inside double quotes in shell code:
+ * reject anything but a boring path so a weird install location
+ * cannot break out of the quoting. */
+static gboolean
+bin_is_shell_safe(const char *bin)
+{
+	const unsigned char *p;
+
+	if (!bin || !*bin || *bin != '/')
+		return FALSE;
+	for (p = (const unsigned char *) bin; *p; p++) {
+		unsigned char c = *p;
+
+		if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+		    (c >= '0' && c <= '9') ||
+		    c == '/' || c == '-' || c == '_' || c == '.' ||
+		    c == '+' || c == ':')
+			continue;
+		return FALSE;
+	}
+	return TRUE;
+}
+
 /* Hook OSC 7 reporting into shell panes so splits can inherit the
  * active pane's cwd. Respects existing user settings: never overrides
  * an already-set ENV or PROMPT_COMMAND. */
@@ -237,6 +311,7 @@ env_integrate_shell(char ***envv, const char *shell)
 {
 	const char *base;
 	const char *old;
+	const char *bin;
 
 	env_set_bin(envv);
 
@@ -245,6 +320,14 @@ env_integrate_shell(char ***envv, const char *shell)
 	if (base && strstr(base, "bash")) {
 		old = g_environ_getenv(*envv, "PROMPT_COMMAND");
 		if (!old || !*old) {
+			bin = g_environ_getenv(*envv, "TAZTERM_BIN");
+			if (!bin_is_shell_safe(bin)) {
+				if (tazterm_debug())
+					g_printerr(
+					    "tazterm: skip PROMPT_COMMAND"
+					    " (unsafe bin path)\n");
+				return;
+			}
 			*envv = g_environ_setenv(*envv, "PROMPT_COMMAND",
 			    "[ -x \"$TAZTERM_BIN\" ] && "
 			    "\"$TAZTERM_BIN\" --osc7",
@@ -392,18 +475,28 @@ tazterm_term_zoom_reset(VteTerminal *term)
 	zoom_set(term, 1.0);
 }
 
+#define TAZTERM_SEARCH_MAX 256
+
 gboolean
 tazterm_term_search(VteTerminal *term, const char *text)
 {
 	VteRegex *regex;
 	GError *err = NULL;
+	char *literal;
 
 	if (!text || !*text)
 		return FALSE;
+	/* Plain-text search: escape regex metacharacters so the pattern
+	 * is always literal (no ReDoS via crafted input) and cap length. */
+	if (strlen(text) > TAZTERM_SEARCH_MAX)
+		return FALSE;
 
+	literal = g_regex_escape_string(text, -1);
 	/* VTE requires PCRE2_MULTILINE for search, otherwise
 	 * search_set_regex fails (VTE-side runtime check). */
-	regex = vte_regex_new_for_search(text, -1, PCRE2_MULTILINE, &err);
+	regex = vte_regex_new_for_search(literal, -1, PCRE2_MULTILINE,
+	    &err);
+	g_free(literal);
 	if (!regex) {
 		g_warning("tazterm: invalid regex: %s",
 		    err ? err->message : "?");
@@ -414,7 +507,7 @@ tazterm_term_search(VteTerminal *term, const char *text)
 	vte_terminal_search_set_wrap_around(term, TRUE);
 	vte_regex_unref(regex);
 	if (tazterm_debug())
-		g_printerr("tazterm: search pattern='%s'\n", text);
+		g_printerr("tazterm: search\n");
 	return vte_terminal_search_find_next(term);
 }
 
@@ -482,8 +575,8 @@ paste_sanitize(const char *in, gsize *out_len)
 	return g_string_free(gs, FALSE);
 }
 
-gboolean
-tazterm_term_feed_paste(VteTerminal *term, const char *text)
+static gboolean
+feed_sanitized(VteTerminal *term, const char *text, gboolean newline)
 {
 	char *clean;
 	gsize len;
@@ -506,11 +599,42 @@ tazterm_term_feed_paste(VteTerminal *term, const char *text)
 	gs = g_string_sized_new(len + 16);
 	g_string_append(gs, "\033[200~");
 	g_string_append_len(gs, clean, (gssize) len);
-	g_string_append(gs, "\033[201~\n");
+	g_string_append(gs, "\033[201~");
+	if (newline)
+		g_string_append_c(gs, '\n');
 	g_free(clean);
 	vte_terminal_feed_child(term, gs->str, (gssize) gs->len);
 	g_string_free(gs, TRUE);
 	return TRUE;
+}
+
+gboolean
+tazterm_term_feed_paste(VteTerminal *term, const char *text)
+{
+	return feed_sanitized(term, text, TRUE);
+}
+
+/* Manual paste (keyboard/menu): same sanitizer as send-to-agent
+ * (C0 stripped, bracketed) but WITHOUT the trailing newline, so
+ * pasting never executes by itself. */
+gboolean
+tazterm_term_paste_clipboard(VteTerminal *term)
+{
+	GtkClipboard *clip;
+	char *text;
+	gboolean ok;
+
+	if (!term)
+		return FALSE;
+	clip = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+	text = gtk_clipboard_wait_for_text(clip);
+	if (!text || !*text) {
+		g_free(text);
+		return FALSE;
+	}
+	ok = feed_sanitized(term, text, FALSE);
+	g_free(text);
+	return ok;
 }
 
 /* Active shell's cwd. /proc first when readable (cannot be spoofed by
@@ -536,6 +660,12 @@ tazterm_term_get_cwd(VteTerminal *term)
 
 	uri = vte_terminal_get_current_directory_uri(term);
 	if (uri && *uri) {
+		/* Only local file URIs: the pty can emit any OSC 7,
+		 * so refuse remote hosts (file://evilhost/...) that
+		 * g_filename_from_uri would happily map to a local path. */
+		if (!g_str_has_prefix(uri, "file://localhost/") &&
+		    !g_str_has_prefix(uri, "file:///"))
+			return NULL;
 		path = g_filename_from_uri(uri, NULL, NULL);
 		if (path && g_file_test(path, G_FILE_TEST_IS_DIR))
 			return path;
