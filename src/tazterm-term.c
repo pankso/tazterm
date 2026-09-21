@@ -1,8 +1,14 @@
 /* tazterm-term.c — VteTerminal wrapper: spawn, zoom, search. */
 #include "tazterm-term.h"
 
+#include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
+
+#include <glib/gstdio.h>
 
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
@@ -21,30 +27,136 @@ tazterm_debug(void)
 	return cached == 1;
 }
 
+gboolean
+tazterm_write_private(const char *path, const char *data, gssize len)
+{
+	char *tmpl;
+	int fd;
+	const char *p;
+	gsize left;
+
+	if (!path || !data)
+		return FALSE;
+	if (len < 0)
+		len = (gssize) strlen(data);
+
+	/* mkstemp 0600 + rename: does not follow a symlink at path. */
+	tmpl = g_strdup_printf("%s.XXXXXX", path);
+	fd = g_mkstemp(tmpl);
+	if (fd < 0) {
+		g_free(tmpl);
+		return FALSE;
+	}
+	(void) fchmod(fd, 0600);
+	p = data;
+	left = (gsize) len;
+	while (left > 0) {
+		gssize n = write(fd, p, left);
+
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			close(fd);
+			unlink(tmpl);
+			g_free(tmpl);
+			return FALSE;
+		}
+		if (n == 0) {
+			close(fd);
+			unlink(tmpl);
+			g_free(tmpl);
+			return FALSE;
+		}
+		p += n;
+		left -= (gsize) n;
+	}
+	if (close(fd) < 0) {
+		unlink(tmpl);
+		g_free(tmpl);
+		return FALSE;
+	}
+	if (rename(tmpl, path) != 0) {
+		unlink(tmpl);
+		g_free(tmpl);
+		return FALSE;
+	}
+	g_free(tmpl);
+	return TRUE;
+}
+
+/* OSC 7 path: unreserved (RFC 3986) plus '/'. Everything else, including
+ * ESC and backslash, becomes %XX so a crafted directory name cannot
+ * terminate the OSC sequence. */
+static void
+osc7_append_path(GString *gs, const char *path)
+{
+	const unsigned char *p;
+
+	for (p = (const unsigned char *) path; *p; p++) {
+		unsigned char c = *p;
+
+		if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+		    (c >= '0' && c <= '9') ||
+		    c == '-' || c == '_' || c == '.' || c == '~' || c == '/')
+			g_string_append_c(gs, (char) c);
+		else
+			g_string_append_printf(gs, "%%%02X", c);
+	}
+}
+
+gboolean
+tazterm_term_osc7_emit(void)
+{
+	char cwd[4096];
+	GString *gs;
+	gsize n, len;
+
+	if (!getcwd(cwd, sizeof cwd))
+		return FALSE;
+	gs = g_string_sized_new(strlen(cwd) + 32);
+	g_string_append(gs, "\033]7;file://localhost");
+	osc7_append_path(gs, cwd);
+	g_string_append(gs, "\033\\");
+	len = gs->len;
+	n = fwrite(gs->str, 1, len, stdout);
+	g_string_free(gs, TRUE);
+	if (n != len)
+		return FALSE;
+	return fflush(stdout) == 0;
+}
+
 /* Shell integration: the shell reports its cwd via OSC 7, which VTE
  * exposes through vte_terminal_get_current_directory_uri().
  * /etc/profile.d/vte.sh only covers login bash/zsh; here we target ash
  * (the SliTaz default) via $ENV, and bash via PROMPT_COMMAND when unset.
  * File owned by tazterm: rewritten when the version marker differs.
  * Users may append custom code BELOW the marker line.
+ *
+ * Encoding is done in C (`tazterm --osc7`): a bashism in PWD would
+ * break ash, and a raw PWD inside OSC 7 lets a directory name inject
+ * terminal sequences. cd() returns the cd status, not the encoder's.
  */
-#define TAZTERM_INTEGRATION_VERSION 1
-
 static const char integration_sh[] =
-"# tazterm shell integration v2 (managed by tazterm, do not edit above)\n"
+"# tazterm shell integration v3 (managed by tazterm, do not edit above)\n"
 "# ash/dash: sourced via $ENV. Reports cwd with OSC 7 for split panes.\n"
 "# bash is covered by PROMPT_COMMAND (see tazterm) or /etc/profile.d/vte.sh.\n"
 "# Custom code may go BELOW the marker line.\n"
-"# TAZTERM-CUSTOM-BELOW\n"
 "if [ -z \"$TAZTERM_OSC7\" ] && [ -n \"$PS1\" ]; then\n"
 "    TAZTERM_OSC7=1\n"
 "    export TAZTERM_OSC7\n"
 "    __tazterm_osc7() {\n"
-"        printf '\\033]7;file://localhost%s\\033\\\\' \"${PWD// /%20}\"\n"
+"        if [ -n \"$TAZTERM_BIN\" ] && [ -x \"$TAZTERM_BIN\" ]; then\n"
+"            \"$TAZTERM_BIN\" --osc7\n"
+"        fi\n"
 "    }\n"
-"    cd() { command cd \"$@\" && __tazterm_osc7; }\n"
+"    cd() {\n"
+"        command cd \"$@\" || return\n"
+"        __tazterm_osc7\n"
+"        return 0\n"
+"    }\n"
 "    __tazterm_osc7\n"
-"fi\n";
+"fi\n"
+"# TAZTERM-CUSTOM-BELOW\n";
 
 static char *
 integration_path(void)
@@ -61,12 +173,18 @@ integration_ensure(void)
 
 	path = integration_path();
 	if (g_file_get_contents(path, &old, NULL, NULL) &&
-	    strstr(old, "tazterm shell integration v2")) {
+	    strstr(old, "tazterm shell integration v3")) {
 		g_free(old);
 		g_free(path);
 		return;
 	}
 	g_free(old);
+	{
+		char *dir = g_path_get_dirname(path);
+
+		g_mkdir_with_parents(dir, 0755);
+		g_free(dir);
+	}
 	if (g_file_set_contents(path, integration_sh, -1, NULL) &&
 	    tazterm_debug())
 		g_printerr("tazterm: wrote %s\n", path);
@@ -97,6 +215,20 @@ on_spawn_ready(VteTerminal *term, GPid pid, GError *error, gpointer user_data)
 		    GINT_TO_POINTER(pid));
 }
 
+static void
+env_set_bin(char ***envv)
+{
+	char *bin;
+
+	bin = g_file_read_link("/proc/self/exe", NULL);
+	if (!bin)
+		bin = g_find_program_in_path("tazterm");
+	if (bin) {
+		*envv = g_environ_setenv(*envv, "TAZTERM_BIN", bin, TRUE);
+		g_free(bin);
+	}
+}
+
 /* Hook OSC 7 reporting into shell panes so splits can inherit the
  * active pane's cwd. Respects existing user settings: never overrides
  * an already-set ENV or PROMPT_COMMAND. */
@@ -106,14 +238,16 @@ env_integrate_shell(char ***envv, const char *shell)
 	const char *base;
 	const char *old;
 
+	env_set_bin(envv);
+
 	base = shell ? strrchr(shell, '/') : NULL;
 	base = base ? base + 1 : shell;
 	if (base && strstr(base, "bash")) {
 		old = g_environ_getenv(*envv, "PROMPT_COMMAND");
 		if (!old || !*old) {
 			*envv = g_environ_setenv(*envv, "PROMPT_COMMAND",
-			    "printf '\\033]7;file://localhost%s\\033\\\\' "
-			    "\"${PWD// /%20}\"",
+			    "[ -x \"$TAZTERM_BIN\" ] && "
+			    "\"$TAZTERM_BIN\" --osc7",
 			    TRUE);
 		} else if (tazterm_debug()) {
 			g_printerr("tazterm: keep user PROMPT_COMMAND\n");
@@ -303,9 +437,84 @@ tazterm_term_get_visible_text(VteTerminal *term)
 	return vte_terminal_get_text(term, NULL, FALSE, NULL);
 }
 
-/* Active shell's cwd. Sources, in order: OSC 7 reported by our shell
- * integration (works everywhere), /proc/<pid>/cwd (same-uid kernels;
- * blocked on some hardened setups), NULL when unknown. Caller frees. */
+char *
+tazterm_term_get_selected_text(VteTerminal *term)
+{
+	GtkClipboard *clip;
+	char *text;
+
+	/* VTE 0.56 exposes no direct "selected text" getter. Copy to
+	 * PRIMARY (not CLIPBOARD) and read it back synchronously. */
+	if (!vte_terminal_get_has_selection(term))
+		return NULL;
+	vte_terminal_copy_primary(term);
+	clip = gtk_clipboard_get(GDK_SELECTION_PRIMARY);
+	text = gtk_clipboard_wait_for_text(clip);
+	if (!text || !*text) {
+		g_free(text);
+		return NULL;
+	}
+	return text;
+}
+
+#define TAZTERM_PASTE_MAX (256 * 1024)
+
+/* Keep tab/newline; drop other C0 and DEL (so ^C/^D/ESC cannot hijack
+ * the agent). Lone CR becomes newline; CR+LF is one newline. */
+static char *
+paste_sanitize(const char *in, gsize *out_len)
+{
+	GString *gs;
+	const unsigned char *p;
+
+	gs = g_string_new(NULL);
+	for (p = (const unsigned char *) in; *p; p++) {
+		if (*p == '\t' || *p == '\n')
+			g_string_append_c(gs, (char) *p);
+		else if (*p == '\r') {
+			if (p[1] != '\n')
+				g_string_append_c(gs, '\n');
+		} else if (*p >= 32 && *p != 127)
+			g_string_append_c(gs, (char) *p);
+	}
+	if (out_len)
+		*out_len = gs->len;
+	return g_string_free(gs, FALSE);
+}
+
+gboolean
+tazterm_term_feed_paste(VteTerminal *term, const char *text)
+{
+	char *clean;
+	gsize len;
+	GString *gs;
+
+	if (!term || !text || !*text)
+		return FALSE;
+	clean = paste_sanitize(text, &len);
+	if (!clean || len == 0) {
+		g_free(clean);
+		return FALSE;
+	}
+	if (len > TAZTERM_PASTE_MAX) {
+		if (tazterm_debug())
+			g_printerr("tazterm: paste too large (%lu bytes)\n",
+			    (unsigned long) len);
+		g_free(clean);
+		return FALSE;
+	}
+	gs = g_string_sized_new(len + 16);
+	g_string_append(gs, "\033[200~");
+	g_string_append_len(gs, clean, (gssize) len);
+	g_string_append(gs, "\033[201~\n");
+	g_free(clean);
+	vte_terminal_feed_child(term, gs->str, (gssize) gs->len);
+	g_string_free(gs, TRUE);
+	return TRUE;
+}
+
+/* Active shell's cwd. /proc first when readable (cannot be spoofed by
+ * OSC 7 from the PTY); OSC 7 next (works when /proc/cwd is blocked). */
 char *
 tazterm_term_get_cwd(VteTerminal *term)
 {
@@ -314,22 +523,23 @@ tazterm_term_get_cwd(VteTerminal *term)
 	gpointer p;
 	char *link;
 
+	p = g_object_get_data(G_OBJECT(term), "tazterm-pid");
+	if (p) {
+		link = g_strdup_printf("/proc/%d/cwd", GPOINTER_TO_INT(p));
+		path = g_file_read_link(link, NULL);
+		g_free(link);
+		if (path && g_file_test(path, G_FILE_TEST_IS_DIR))
+			return path;
+		g_free(path);
+		path = NULL;
+	}
+
 	uri = vte_terminal_get_current_directory_uri(term);
 	if (uri && *uri) {
 		path = g_filename_from_uri(uri, NULL, NULL);
-		if (path && !g_file_test(path, G_FILE_TEST_IS_DIR)) {
-			g_free(path);
-			path = NULL;
-		}
-		if (path)
+		if (path && g_file_test(path, G_FILE_TEST_IS_DIR))
 			return path;
+		g_free(path);
 	}
-
-	p = g_object_get_data(G_OBJECT(term), "tazterm-pid");
-	if (!p)
-		return NULL;
-	link = g_strdup_printf("/proc/%d/cwd", GPOINTER_TO_INT(p));
-	path = g_file_read_link(link, NULL);
-	g_free(link);
-	return path; /* NULL if the process is gone */
+	return NULL;
 }

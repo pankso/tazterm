@@ -64,6 +64,10 @@ msgstr "Copier le scrollback"
 msgid "Expliquer la dernière erreur"
 msgstr "Expliquer la dernière erreur"
 
+#: src/tazterm-window.c:545
+msgid "Envoyer à l'agent"
+msgstr "Envoyer à l'agent"
+
 #: src/tazterm-window.c:441
 msgid "Zoom avant"
 msgstr "Zoom avant"

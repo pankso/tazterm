@@ -4,3 +4,13 @@ src/tazterm
 *~
 *.orig
 *.rej
+tools/xlist2
+tools/xgeom2
+tools/tazraise
+tools/tazactive
+tools/clicker2
+tools/tazkey
+tools/svg2png
+tools/sizeloop
+debug.png
+/tmp-*.log

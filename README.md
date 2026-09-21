@@ -32,6 +32,7 @@ cd src && make && ./tazterm
 - `Ctrl+Shift+F` : afficher / masquer la recherche (suit le panneau actif)
 - `F11` ou clic droit → `Plein écran` : basculer le plein écran
 - `Ctrl+Shift+A` : ouvrir un split agent IA (agent par défaut)
+- `Ctrl+Shift+T` ou clic droit → `Envoyer à l'agent` : envoyer la sélection du panneau courant au panneau agent (avec Entrée)
 - Clic droit → `Ouvrir un split agent (…)` : défaut, ou `Split agent : claude`
   / `Split agent : navette` pour les autres agents détectés
 - `Ctrl+Shift+S` : copier le scrollback (presse-papier + `/tmp/tazterm-capture-*.log`)
@@ -61,7 +62,7 @@ TUI) marche tel quel.
 
 ```ini
 [terminal]
-font=Monospace 10
+font=Monospace 12
 shell=/bin/sh
 scrollback_lines=10000
 foreground=#e6e8ed

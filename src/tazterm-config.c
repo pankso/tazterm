@@ -2,7 +2,7 @@
  *
  * File: ~/.config/tazterm/tazterm.conf
  *   [terminal]
- *   font=Monospace 10
+ *   font=Monospace 12
  *   shell=/bin/sh
  *   scrollback_lines=10000
  *   foreground=#e6e8ed
@@ -15,7 +15,7 @@
  */
 #include "tazterm-config.h"
 
-#define TAZTERM_DEFAULT_FONT "Monospace 10"
+#define TAZTERM_DEFAULT_FONT "Monospace 12"
 #define TAZTERM_DEFAULT_SHELL "/bin/sh"
 #define TAZTERM_DEFAULT_SCROLLBACK 10000
 

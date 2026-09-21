@@ -7,7 +7,7 @@
 G_BEGIN_DECLS
 
 typedef struct {
-	char *font_desc;   /* e.g. "Monospace 10" */
+	char *font_desc;   /* e.g. "Monospace 12" */
 	char *shell;       /* default: /bin/sh (BusyBox ash) */
 	char *workdir;     /* NULL = $HOME */
 	long scrollback;   /* lines, default 10000 */

@@ -288,6 +288,27 @@ tazterm_split_active_term(GtkWidget *split)
 	return SPLIT(split)->active;
 }
 
+VteTerminal *
+tazterm_split_find_agent(GtkWidget *split)
+{
+	GPtrArray *arr;
+	VteTerminal *found = NULL;
+	guint i;
+
+	arr = g_ptr_array_new();
+	collect_terms(split, arr);
+	for (i = 0; i < arr->len; i++) {
+		VteTerminal *t = VTE_TERMINAL(g_ptr_array_index(arr, i));
+
+		if (g_object_get_data(G_OBJECT(t), "tazterm-agent")) {
+			found = t;
+			break;
+		}
+	}
+	g_ptr_array_free(arr, TRUE);
+	return found;
+}
+
 int
 tazterm_split_count(GtkWidget *split)
 {

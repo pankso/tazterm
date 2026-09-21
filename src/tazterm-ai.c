@@ -131,7 +131,7 @@ tazterm_ai_save_capture(GtkWidget *win, const char *text,
 
 	path = g_strdup_printf("/tmp/tazterm-%s-%d.log", prefix,
 	    (int) getpid());
-	if (!g_file_set_contents(path, text, -1, NULL)) {
+	if (!tazterm_write_private(path, text, -1)) {
 		g_free(path);
 		return NULL;
 	}
@@ -170,7 +170,7 @@ tazterm_ai_explain(GtkWidget *win, VteTerminal *term, int nlines)
 
 	path = g_strdup_printf("/tmp/tazterm-explain-%d.md",
 	    (int) getpid());
-	if (!g_file_set_contents(path, prompt->str, -1, NULL)) {
+	if (!tazterm_write_private(path, prompt->str, -1)) {
 		g_free(path);
 		path = NULL;
 	}

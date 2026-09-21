@@ -37,8 +37,25 @@ gboolean tazterm_term_search_prev(VteTerminal *term);
 /* Currently visible text (for output capture). Caller frees (g_free). */
 char *tazterm_term_get_visible_text(VteTerminal *term);
 
-/* Active shell's cwd (OSC 7, then /proc). Caller frees, NULL if unknown. */
+/* Currently selected text, or NULL when there is no selection.
+ * Reads PRIMARY (does not touch CLIPBOARD). Caller frees (g_free). */
+char *tazterm_term_get_selected_text(VteTerminal *term);
+
+/* Feed text as one paste: strip C0 (keep tab/newline), wrap in
+ * bracketed-paste, one trailing newline. FALSE if empty or too large. */
+gboolean tazterm_term_feed_paste(VteTerminal *term, const char *text);
+
+/* Active shell's cwd (/proc then OSC 7). Caller frees, NULL if unknown. */
 char *tazterm_term_get_cwd(VteTerminal *term);
+
+/* Write data to path as mode 0600 (temp+rename, does not follow a
+ * symlink at path). len < 0 means strlen(data). */
+gboolean tazterm_write_private(const char *path, const char *data,
+    gssize len);
+
+/* Emit OSC 7 for getcwd() to stdout (percent-encoded path).
+ * Used as `tazterm --osc7` from the shell integration; no GTK. */
+gboolean tazterm_term_osc7_emit(void);
 
 G_END_DECLS
 

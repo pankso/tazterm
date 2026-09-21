@@ -10,6 +10,7 @@
  *   Ctrl+Shift+O          : split stacked (vertical paned)
  *   Ctrl+Shift+W          : close current pane
  *   Ctrl+Shift+A          : open an agent split (active pane)
+ *   Ctrl+Shift+T          : send selection to the agent pane
  *   Ctrl+Shift+S          : copy scrollback (clipboard + /tmp)
  *   Ctrl+Shift+X          : explain last error (/tmp + clipboard)
  *   Alt+Arrows            : focus neighbor pane
@@ -25,6 +26,8 @@
 #include <glib/gi18n.h>
 #include <glib-unix.h>
 #include <signal.h>
+#include <string.h>
+#include <unistd.h>
 
 typedef struct {
 	GtkWidget *win;
@@ -50,7 +53,7 @@ win_free(gpointer data)
 #define TW(x) ((TaztermWin *) (x))
 
 /* Debug aid: SIGUSR1 dumps the active pane's text (headless rendering
- * checks). Single-window app: global is fine. */
+ * checks). Registered only when TAZTERM_DEBUG is set. */
 static TaztermWin *debug_win = NULL;
 
 static gboolean
@@ -69,9 +72,11 @@ on_sigusr1(gpointer data)
 		return TRUE;
 	text = tazterm_term_get_visible_text(term);
 	path = g_strdup_printf("/tmp/tazterm-dump-%d.txt", (int) getpid());
-	g_file_set_contents(path, text ? text : "", -1, NULL);
-	g_printerr("tazterm: dump -> %s (%lu bytes)\n", path,
-	    (unsigned long) (text ? strlen(text) : 0));
+	if (!tazterm_write_private(path, text ? text : "", -1))
+		g_printerr("tazterm: dump failed\n");
+	else
+		g_printerr("tazterm: dump -> %s (%lu bytes)\n", path,
+		    (unsigned long) (text ? strlen(text) : 0));
 	g_free(text);
 	g_free(path);
 	return TRUE;
@@ -303,6 +308,15 @@ ai_agent_split(TaztermWin *tw, const char *agent)
 	}
 	cmd = tazterm_ai_launch_cmd(agent);
 	tazterm_split_vertical_cmd(tw->split, cmd);
+	/* The new pane becomes active: tag it so "send to agent"
+	 * can find it later. */
+	{
+		VteTerminal *pane = tazterm_split_active_term(tw->split);
+
+		if (pane)
+			g_object_set_data(G_OBJECT(pane), "tazterm-agent",
+			    GINT_TO_POINTER(TRUE));
+	}
 	if (tazterm_debug())
 		g_printerr("tazterm: agent split: %s (agent=%s)\n", cmd,
 		    agent);
@@ -390,6 +404,72 @@ on_explain(GtkMenuItem *item, gpointer data)
 	ai_explain(TW(data));
 }
 
+/* Feed the source pane's selection to the agent as one bracketed paste
+ * (C0 stripped, one trailing newline), then focus the agent.
+ * No agent pane, no selection, or source IS the agent: do nothing. */
+static void
+ai_send_to_agent(TaztermWin *tw, VteTerminal *src)
+{
+	VteTerminal *agent;
+	char *text;
+
+	if (!src)
+		src = tazterm_split_active_term(tw->split);
+	if (!src)
+		return;
+	agent = tazterm_split_find_agent(tw->split);
+	if (!agent) {
+		if (tazterm_debug())
+			g_printerr("tazterm: send to agent: no agent pane\n");
+		return;
+	}
+	if (agent == src) {
+		if (tazterm_debug())
+			g_printerr("tazterm: send to agent: source is agent\n");
+		return;
+	}
+	text = tazterm_term_get_selected_text(src);
+	if (!text) {
+		if (tazterm_debug())
+			g_printerr(
+			    "tazterm: send to agent without selection\n");
+		return;
+	}
+	if (!tazterm_term_feed_paste(agent, text)) {
+		if (tazterm_debug())
+			g_printerr("tazterm: send to agent: paste refused\n");
+		g_free(text);
+		return;
+	}
+	gtk_widget_grab_focus(GTK_WIDGET(agent));
+	if (tazterm_debug())
+		g_printerr("tazterm: sent %lu bytes to agent\n",
+		    (unsigned long) strlen(text));
+	g_free(text);
+}
+
+/* "Send to agent" request (clicked source pane); freed with the menu. */
+typedef struct {
+	TaztermWin *tw;
+	VteTerminal *src; /* not owned (in tree) */
+} SendReq;
+
+static void
+send_req_free(gpointer data, GClosure *closure)
+{
+	(void) closure;
+	g_free(data);
+}
+
+static void
+on_send_to_agent(GtkMenuItem *item, gpointer data)
+{
+	SendReq *req = data;
+
+	(void) item;
+	ai_send_to_agent(req->tw, req->src);
+}
+
 static void
 menu_add(GtkWidget *menu, const char *label,
     GCallback cb, gpointer data)
@@ -465,6 +545,24 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 	    G_CALLBACK(on_copy_scrollback), tw);
 	menu_add(menu, _("Expliquer la dernière erreur"),
 	    G_CALLBACK(on_explain), tw);
+	{
+		GtkWidget *item;
+		SendReq *req;
+
+		/* Source = the clicked pane (captured now): focusing the
+		 * agent after the send must not change what gets sent. */
+		req = g_new0(SendReq, 1);
+		req->tw = tw;
+		req->src = term;
+		item = gtk_menu_item_new_with_label(
+		    _("Envoyer à l'agent"));
+		g_signal_connect_data(item, "activate",
+		    G_CALLBACK(on_send_to_agent), req, send_req_free, 0);
+		gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+		gtk_widget_set_sensitive(item,
+		    vte_terminal_get_has_selection(term) &&
+		    tazterm_split_find_agent(tw->split) != NULL);
+	}
 	sep = gtk_separator_menu_item_new();
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
 	menu_add(menu, _("Zoom avant"), G_CALLBACK(on_zoom_in), tw);
@@ -595,6 +693,10 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 		case GDK_KEY_a:
 			ai_agent_split(tw, NULL);
 			return TRUE;
+		case GDK_KEY_T:
+		case GDK_KEY_t:
+			ai_send_to_agent(tw, term);
+			return TRUE;
 		case GDK_KEY_S:
 		case GDK_KEY_s:
 			ai_copy_scrollback(tw);
@@ -718,6 +820,7 @@ tazterm_window_new(TaztermConfig *cfg,
 
 	tw->win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(tw->win), "TazTerm");
+	gtk_window_set_icon_name(GTK_WINDOW(tw->win), "tazterm");
 	gtk_window_set_default_size(GTK_WINDOW(tw->win), 900, 600);
 	g_signal_connect(tw->win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(tw->win, "window-state-event",
@@ -752,7 +855,8 @@ tazterm_window_new(TaztermConfig *cfg,
 	g_object_set_data_full(G_OBJECT(tw->win), "tazterm-win", tw, win_free);
 
 	debug_win = tw;
-	g_unix_signal_add(SIGUSR1, on_sigusr1, NULL);
+	if (tazterm_debug())
+		g_unix_signal_add(SIGUSR1, on_sigusr1, NULL);
 
 	return tw->win;
 }

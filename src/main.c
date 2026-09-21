@@ -3,11 +3,13 @@
  * Directory precedence: --working-directory > config > $HOME. */
 #include <gtk/gtk.h>
 #include <stdlib.h>
+#include <string.h>
 #include <locale.h>
 
 #include <glib/gi18n.h>
 
 #include "tazterm-config.h"
+#include "tazterm-term.h"
 #include "tazterm-window.h"
 
 #define TAZTERM_VERSION "0.5"
@@ -41,6 +43,10 @@ main(int argc, char *argv[])
 		{ NULL }
 	};
 
+	/* Shell integration hook: emit OSC 7 and exit, no GTK. */
+	if (argc >= 2 && strcmp(argv[1], "--osc7") == 0)
+		return tazterm_term_osc7_emit() ? 0 : 1;
+
 	/* SliTaz has no accessibility bus: cut the at-spi bridge to avoid
 	 * the "Couldn't connect to accessibility bus" warning. */
 	setenv("NO_AT_BRIDGE", "1", 0);
@@ -71,6 +77,12 @@ main(int argc, char *argv[])
 	}
 
 	cfg = tazterm_config_load();
+
+	/* Window/taskbar icon (openbox decor): the menu icon comes from
+	 * the .desktop Icon= via hicolor, but the X window needs
+	 * _NET_WM_ICON, which GTK only sets from the window icon. */
+	g_set_prgname("tazterm");
+	gtk_window_set_default_icon_name("tazterm");
 
 	win = tazterm_window_new(cfg, opt_shell, opt_workdir);
 	gtk_widget_show_all(win);

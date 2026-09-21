@@ -42,6 +42,10 @@ GtkWidget *tazterm_split_new(TaztermConfig *cfg,
 /* Active pane's terminal (never NULL while a pane remains). */
 VteTerminal *tazterm_split_active_term(GtkWidget *split);
 
+/* First pane tagged as an agent (see "tazterm-agent" object data),
+ * or NULL when there is none. */
+VteTerminal *tazterm_split_find_agent(GtkWidget *split);
+
 /* Pane count (debug / tests). */
 int tazterm_split_count(GtkWidget *split);
 
