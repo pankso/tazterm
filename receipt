@@ -29,6 +29,12 @@ genpkg_rules()
 	chown -R root:root $fs
 }
 
+# Unit tests (no display): redaction, paste sanitizer, command parsing.
+testsuite()
+{
+	cd $src && make test
+}
+
 post_install()
 {
 	gtk-update-icon-cache -q -t -f "$1/usr/share/icons/hicolor" 2>/dev/null

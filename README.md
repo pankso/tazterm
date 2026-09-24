@@ -107,7 +107,8 @@ Requirements: GTK 3.22 or newer, VTE 0.56 or newer (`vte-2.91`), pkg-config, get
 
 ```sh
 make                 # binary in src/tazterm
-make check           # tests, needs Xvfb (uses display :7 unless TAZTERM_TEST_DISPLAY)
+make test            # unit tests only, no display (run on every cook)
+make check           # all tests, needs Xvfb (uses display :7 unless TAZTERM_TEST_DISPLAY)
 sudo make install    # PREFIX=/usr by default
 ```
 

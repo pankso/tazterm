@@ -14,6 +14,11 @@ all:
 check: all
 	$(MAKE) -C tests check
 
+# Pure unit tests, no display: run by the receipt testsuite() on every cook.
+test: all
+	$(MAKE) -C tests unit
+	./tests/unit
+
 install: all
 	$(MAKE) -C src install DESTDIR=$(DESTDIR) PREFIX=$(PREFIX)
 	$(MAKE) -C po install DESTDIR=$(DESTDIR) PREFIX=$(PREFIX)
@@ -47,4 +52,4 @@ clean:
 	$(MAKE) -C tests clean
 	$(MAKE) -C po clean
 
-.PHONY: all check install uninstall clean
+.PHONY: all check test install uninstall clean
