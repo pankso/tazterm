@@ -50,15 +50,30 @@ static TaztermConfig *ctl_cfg;
 
 /* --- shared --------------------------------------------------------------- */
 
+/* Unix socket paths are limited (108 bytes on Linux) and a longer one
+ * gets silently truncated by the kernel/GLib: the socket would land
+ * elsewhere, outside the 0700 directory. Leave room for "/PID.sock". */
+#define CTL_PATH_MAX (sizeof(((struct sockaddr_un *) 0)->sun_path) - 1)
+
 static char *
 ctl_dir(void)
 {
 	const char *rt;
+	char *dir;
 
 	rt = g_getenv("XDG_RUNTIME_DIR");
 	if (rt && *rt && g_file_test(rt, G_FILE_TEST_IS_DIR))
-		return g_build_filename(rt, "tazterm", NULL);
-	return g_build_filename(g_get_user_cache_dir(), "tazterm", NULL);
+		dir = g_build_filename(rt, "tazterm", NULL);
+	else
+		dir = g_build_filename(g_get_user_cache_dir(), "tazterm",
+		    NULL);
+	if (strlen(dir) + 16 > CTL_PATH_MAX) {
+		/* Deep $XDG_CACHE_HOME: short private fallback, checked
+		 * like the others (ours, 0700, not a symlink). */
+		g_free(dir);
+		dir = g_strdup_printf("/tmp/tazterm-%u", (unsigned) getuid());
+	}
+	return dir;
 }
 
 /* "1234.sock" whose process is alive. */

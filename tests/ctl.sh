@@ -45,6 +45,20 @@ check "hold reports exit 3" 'ctl ls | grep -q "exited 3"'
 kill $pid
 sleep 1
 
+# Deep XDG_CACHE_HOME: no truncated socket, short /tmp fallback.
+deep=$XDG_CACHE_HOME/a-rather-long-directory-name/another-long-one/and-more/still-more-to-pass-108
+mkdir -p "$deep"
+XDG_CACHE_HOME=$deep "$BIN" -e sleep 30 >/dev/null 2>&1 &
+pid=$!
+sleep 2
+check "long path: socket in /tmp/tazterm-UID" \
+	'[ -S /tmp/tazterm-$(id -u)/$pid.sock ] &&
+	 XDG_CACHE_HOME=$deep "$BIN" ctl ls | grep -q "^1	"'
+check "long path: nothing truncated" \
+	'[ -z "$(find "$deep" -type s)" ]'
+kill $pid
+sleep 1
+
 check "-v without display" 'DISPLAY= "$BIN" -v | grep -q "^tazterm "'
 
 exit $fails
