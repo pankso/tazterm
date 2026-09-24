@@ -2,9 +2,8 @@
 Type=Application
 Name=TazTerm
 GenericName=Terminal
-GenericName[fr]=Terminal
-Comment=Lightweight GTK3/VTE terminal with splits
-Comment[fr]=Terminal GTK3/VTE léger avec panneaux divisés
+Comment=Light GTK3/VTE terminal with split panes, made for AI agents
+Comment[fr]=Terminal GTK3/VTE léger à panneaux, pensé pour les agents IA
 Exec=tazterm
 Icon=tazterm
 StartupWMClass=tazterm
