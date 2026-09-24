@@ -833,15 +833,15 @@ paste_confirm(PasteReq *req)
 	    gtk_widget_is_toplevel(top) ? GTK_WINDOW(top) : NULL,
 	    GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
 	    GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE,
-	    _("Coller %u lignes dans le shell ?"), n);
+	    _("Paste %u lines into the shell?"), n);
 	gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
 	    "%s\n\n%s",
-	    _("Ce shell exécute chaque ligne dès qu'elle est collée."),
+	    _("This shell runs each line as soon as it is pasted."),
 	    preview->str);
 	g_string_free(preview, TRUE);
 	gtk_dialog_add_buttons(GTK_DIALOG(dialog),
-	    _("Annuler"), GTK_RESPONSE_CANCEL,
-	    _("Coller"), GTK_RESPONSE_ACCEPT, NULL);
+	    _("Cancel"), GTK_RESPONSE_CANCEL,
+	    _("Paste"), GTK_RESPONSE_ACCEPT, NULL);
 	gtk_dialog_set_default_response(GTK_DIALOG(dialog),
 	    GTK_RESPONSE_CANCEL);
 	g_signal_connect(dialog, "response", G_CALLBACK(on_paste_confirm),

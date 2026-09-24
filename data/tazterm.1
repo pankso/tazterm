@@ -1,0 +1,126 @@
+.TH TAZTERM 1 "2026-09-24" "tazterm 0.6" "SliTaz"
+.SH NAME
+tazterm \- light GTK3/VTE terminal with split panes, AI friendly
+.SH SYNOPSIS
+.B tazterm
+[\fIOPTION\fR...] [\fB\-e\fR \fICOMMAND\fR [\fIARGS\fR...]]
+.br
+.B tazterm ctl
+\fBls\fR | \fBread\fR | \fBblocks\fR | \fBwait\fR | \fBnotify\fR | \fBguide\fR [\fIOPTIONS\fR]
+.SH DESCRIPTION
+TazTerm is the SliTaz terminal: split panes in one window, a status
+line per pane, command blocks for bash, safe paste, and a read-only
+control socket so AI agents (claude, opencode, navette) can see the
+user's panes instead of asking for copy and paste.
+.SH OPTIONS
+.TP
+.BR \-d ", " \-\-working\-directory =\fIDIR\fR
+Start the shell in \fIDIR\fR.
+.TP
+.BR \-s ", " \-\-shell =\fISHELL\fR
+Shell to run (default: \fBshell\fR in the config, else /bin/sh).
+.TP
+.BR \-e " " \fICOMMAND\fR " [" \fIARGS\fR ...]
+Run \fICOMMAND\fR instead of a shell; everything after \fB\-e\fR belongs
+to it. A single argument with spaces is parsed as a command line.
+.TP
+.BR \-T ", " \-title " " \fITITLE\fR
+Window title.
+.TP
+.BR \-geometry " " \fICOLS\fRx\fIROWS\fR[+\fIX\fR+\fIY\fR]
+Terminal size in characters, optional position.
+.TP
+.BR \-H ", " \-hold
+Keep the \fB\-e\fR pane open after the command ends, with its exit code.
+.TP
+.BR \-\-class =\fICLASS\fR ", " \-\-name =\fINAME\fR
+WM_CLASS for the window manager.
+.TP
+.BR \-v ", " \-version
+Print the version (no display needed).
+.PP
+Single-dash long options (\fB\-geometry\fR, \fB\-title\fR, \fB\-hold\fR)
+follow xterm, as used by the SliTaz \fBterminal\fR wrapper.
+.SH KEYS
+.TP
+.B Ctrl+Shift+C / V / Q
+Copy, paste, quit (asks when a program still runs).
+.TP
+.B Ctrl+Shift+E / O / W
+Split side by side, split stacked, close pane.
+.TP
+.B Alt+Arrows
+Move to the neighbor pane.
+.TP
+.B Ctrl+Shift+Up / Down
+Jump to the previous / next prompt (bash panes).
+.TP
+.B Ctrl+Shift+F
+Find in the scrollback.
+.TP
+.B Ctrl+Shift+A / T / X
+Open an agent split, send the selection to the agent, send the last
+command (or the last lines) to the agent. Nothing is submitted: the
+user adds a question and presses Enter.
+.TP
+.B Ctrl+Shift+S
+Copy the scrollback to the clipboard.
+.TP
+.B Ctrl+click
+Open a URL with $BROWSER, or \fIfile\fR:\fIline\fR in a terminal editor.
+.TP
+.B Ctrl+Plus / Minus / 0, F11
+Zoom, fullscreen.
+.SH PASTE
+Control characters are stripped. A multi-line paste into a shell
+without bracketed paste (busybox ash), where each line would run at
+once, asks for confirmation first.
+.SH COMMAND BLOCKS
+bash panes start with \fB\-\-rcfile\fR ~/.config/tazterm/bash-integration.sh,
+which sources ~/.bashrc and marks each prompt. tazterm then knows every
+command, its output, exit code and duration. busybox ash has no prompt
+hook: no blocks there.
+.SH TAZTERM CTL
+Every pane exports TAZTERM_SOCKET, TAZTERM_PANE and TERM_PROGRAM=tazterm.
+The socket is read-only: a program may read panes, never type into them.
+.TP
+.B ls
+Panes: id, role, state, activity (busy, idle, bell, exited), process,
+cwd, title.
+.TP
+.BR read " [" \-p " " \fIID\fR "] [" \-n " " \fIN\fR " | " \-a " | " \-l ]
+Last lines of a pane; \fB\-l\fR: its last command block. Without \fB\-p\fR:
+the pane the user came from.
+.TP
+.BR blocks " [" \-p " " \fIID\fR "] [" \-n " " \fIN\fR ]
+Recent commands with exit code and duration.
+.TP
+.BR wait " [" \-p " " \fIID\fR "] [" \-t " " \fISECS\fR ]
+Wait for the next command of a pane to end, print it, exit with its
+status.
+.TP
+.BR notify " [" \fITEXT\fR ]
+Outline the caller's pane in orange and set the window urgency hint.
+.TP
+.B guide
+How an AI agent should use tazterm (markdown).
+.PP
+Keys, tokens and passwords are masked as [REDACTED] unless
+\fBredact=false\fR.
+.SH FILES
+.TP
+.I ~/.config/tazterm/tazterm.conf
+Configuration (created with every key and comments).
+.TP
+.I ~/.config/tazterm/shell-integration.sh, bash-integration.sh
+Shell hooks, managed by tazterm.
+.TP
+.I $XDG_RUNTIME_DIR/tazterm/PID.sock
+Control socket (else ~/.cache/tazterm/), directory 0700.
+.SH ENVIRONMENT
+TAZTERM_DEBUG=1 (logs on stderr), TAZTERM_SHELL, TAZTERM_AGENT_CMD.
+.SH SEE ALSO
+.BR terminal (1),
+.BR vte (3)
+.SH AUTHOR
+Christophe Lincoln and the SliTaz contributors. GPL-3.0-or-later.

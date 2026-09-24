@@ -348,13 +348,13 @@ close_confirm(TaztermWin *tw, VteTerminal *term)
 	dialog = gtk_message_dialog_new(GTK_WINDOW(tw->win),
 	    GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
 	    GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE, "%s",
-	    term ? _("Fermer ce panneau ?") : _("Fermer TazTerm ?"));
+	    term ? _("Close this pane?") : _("Close TazTerm?"));
 	gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
-	    _("Encore en cours : %s. Il sera arrêté."), busy->str);
+	    _("Still running: %s. It will be stopped."), busy->str);
 	g_string_free(busy, TRUE);
 	gtk_dialog_add_buttons(GTK_DIALOG(dialog),
-	    _("Annuler"), GTK_RESPONSE_CANCEL,
-	    _("Fermer"), GTK_RESPONSE_ACCEPT, NULL);
+	    _("Cancel"), GTK_RESPONSE_CANCEL,
+	    _("Close"), GTK_RESPONSE_ACCEPT, NULL);
 	gtk_dialog_set_default_response(GTK_DIALOG(dialog),
 	    GTK_RESPONSE_CANCEL);
 	req = g_new0(CloseReq, 1);
@@ -699,19 +699,19 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 	GtkWidget *sep;
 
 	menu = gtk_menu_new();
-	menu_add(menu, _("Copier"), G_CALLBACK(on_copy), term);
-	menu_add(menu, _("Coller"), G_CALLBACK(on_paste), term);
-	menu_add(menu, _("Tout sélectionner"), G_CALLBACK(on_select_all),
+	menu_add(menu, _("Copy"), G_CALLBACK(on_copy), term);
+	menu_add(menu, _("Paste"), G_CALLBACK(on_paste), term);
+	menu_add(menu, _("Select All"), G_CALLBACK(on_select_all),
 	    term);
 	sep = gtk_separator_menu_item_new();
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
-	menu_add(menu, _("Rechercher…"), G_CALLBACK(on_search_menu), tw);
+	menu_add(menu, _("Find…"), G_CALLBACK(on_search_menu), tw);
 	sep = gtk_separator_menu_item_new();
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
-	menu_add(menu, _("Diviser côté à côté"), G_CALLBACK(on_split_v),
+	menu_add(menu, _("Split Side by Side"), G_CALLBACK(on_split_v),
 	    tw);
-	menu_add(menu, _("Diviser empilés"), G_CALLBACK(on_split_h), tw);
-	menu_add(menu, _("Fermer ce panneau"), G_CALLBACK(on_close_pane),
+	menu_add(menu, _("Split Stacked"), G_CALLBACK(on_split_h), tw);
+	menu_add(menu, _("Close Pane"), G_CALLBACK(on_close_pane),
 	    tw);
 	sep = gtk_separator_menu_item_new();
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
@@ -721,7 +721,7 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 
 		/* Shortcut = default; menu = one item per detected agent. */
 		label = g_strdup_printf(
-		    _("Ouvrir un split agent (%s)"), tw->agent);
+		    _("Open Agent Split (%s)"), tw->agent);
 		menu_add(menu, label, G_CALLBACK(on_agent_split), tw);
 		g_free(label);
 		for (i = 0; tw->agents && tw->agents[i]; i++) {
@@ -732,7 +732,7 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 			req = g_new0(AgentSplitReq, 1);
 			req->tw = tw;
 			req->agent = g_strdup(tw->agents[i]);
-			label = g_strdup_printf(_("Split agent : %s"),
+			label = g_strdup_printf(_("Agent Split: %s"),
 			    tw->agents[i]);
 			menu_add_data(menu, label,
 			    G_CALLBACK(on_agent_split_named), req,
@@ -740,9 +740,9 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 			g_free(label);
 		}
 	}
-	menu_add(menu, _("Copier le scrollback"),
+	menu_add(menu, _("Copy Scrollback"),
 	    G_CALLBACK(on_copy_scrollback), tw);
-	menu_add(menu, _("Expliquer la dernière erreur"),
+	menu_add(menu, _("Explain Last Error"),
 	    G_CALLBACK(on_explain), tw);
 	{
 		GtkWidget *item;
@@ -756,7 +756,7 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 		g_object_add_weak_pointer(G_OBJECT(term),
 		    (gpointer *) &req->src);
 		item = gtk_menu_item_new_with_label(
-		    _("Envoyer à l'agent"));
+		    _("Send to Agent"));
 		g_signal_connect_data(item, "activate",
 		    G_CALLBACK(on_send_to_agent), req, send_req_free, 0);
 		gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
@@ -766,16 +766,16 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 	}
 	sep = gtk_separator_menu_item_new();
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
-	menu_add(menu, _("Zoom avant"), G_CALLBACK(on_zoom_in), tw);
-	menu_add(menu, _("Zoom arrière"), G_CALLBACK(on_zoom_out), tw);
-	menu_add(menu, _("Taille normale"), G_CALLBACK(on_zoom_reset),
+	menu_add(menu, _("Zoom In"), G_CALLBACK(on_zoom_in), tw);
+	menu_add(menu, _("Zoom Out"), G_CALLBACK(on_zoom_out), tw);
+	menu_add(menu, _("Normal Size"), G_CALLBACK(on_zoom_reset),
 	    tw);
 	sep = gtk_separator_menu_item_new();
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
 	{
 		GtkWidget *fs;
 
-		fs = gtk_check_menu_item_new_with_label(_("Plein écran"));
+		fs = gtk_check_menu_item_new_with_label(_("Fullscreen"));
 		gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(fs),
 		    tw->fullscreen);
 		g_signal_connect(fs, "activate", G_CALLBACK(on_fullscreen),
@@ -1219,7 +1219,7 @@ status_update(VteTerminal *term)
 	spath = cwd ? short_path(cwd) : g_strdup("");
 	ltext = g_strdup_printf("%d · %s · %s%s%s",
 	    tazterm_term_get_id(term),
-	    agent ? _("agent") : shell ? _("shell") : _("commande"),
+	    agent ? _("agent") : shell ? _("shell") : _("command"),
 	    proc ? proc : "-", *spath ? " · " : "", spath);
 	label_set(left, ltext, FALSE);
 
@@ -1230,28 +1230,28 @@ status_update(VteTerminal *term)
 	base = base ? base + 1 : shell_path;
 	if (exitst)
 		rtext = WIFEXITED(exitst - 1) ?
-		    g_strdup_printf(_("terminé (code %d)"),
-		    WEXITSTATUS(exitst - 1)) : g_strdup(_("terminé (signal)"));
+		    g_strdup_printf(_("done (exit %d)"),
+		    WEXITSTATUS(exitst - 1)) : g_strdup(_("done (signal)"));
 	else if (g_object_get_data(G_OBJECT(term), "tazterm-bell"))
 		rtext = g_strdup_printf("<span foreground=\"#f57900\">● %s"
-		    "</span>", _("attend une réponse"));
+		    "</span>", _("waiting for you"));
 	else if ((running = tazterm_blocks_running(term)) >= 0) {
 		char *rage = fmt_age(running);
 
 		rtext = g_strdup_printf("<span foreground=\"#73d216\">● %s · "
-		    "%s</span>", idle < STATUS_BUSY_SECS ? _("actif") :
-		    _("en cours"), rage);
+		    "%s</span>", idle < STATUS_BUSY_SECS ? _("active") :
+		    _("running"), rage);
 		g_free(rage);
 	} else if (idle < STATUS_BUSY_SECS)
 		rtext = g_strdup_printf("<span foreground=\"#73d216\">● %s"
-		    "</span>", agent ? _("travaille") : _("actif"));
+		    "</span>", agent ? _("working") : _("active"));
 	else if (!agent && (last_exit = tazterm_blocks_last_exit(term)) > 0)
 		rtext = g_strdup_printf("<span foreground=\"#ef2929\">✗ %s "
-		    "%d</span>", _("code"), last_exit);
+		    "%d</span>", _("exit"), last_exit);
 	else if (agent)
-		rtext = g_strdup_printf(_("en attente · %s"), age);
+		rtext = g_strdup_printf(_("idle · %s"), age);
 	else if (shell && proc && g_strcmp0(proc, base) != 0)
-		rtext = g_strdup_printf(_("silencieux · %s"), age);
+		rtext = g_strdup_printf(_("quiet · %s"), age);
 	else
 		rtext = g_strdup("");
 	label_set(right, rtext, TRUE);
@@ -1323,16 +1323,16 @@ on_child_exited(VteTerminal *term, int status, gpointer data)
 	TaztermWin *tw = TW(data);
 
 	if (g_object_get_data(G_OBJECT(term), "tazterm-hold")) {
-		char *msg;
+		char *msg, *note;
 
 		if (WIFEXITED(status))
-			msg = g_strdup_printf(_("\r\n[terminé, code %d — "
-			    "Ctrl+Shift+W pour fermer]\r\n"),
-			    WEXITSTATUS(status));
+			note = g_strdup_printf(_("exited with code %d — "
+			    "Ctrl+Shift+W to close"), WEXITSTATUS(status));
 		else
-			msg = g_strdup_printf(_("\r\n[terminé par le signal "
-			    "%d — Ctrl+Shift+W pour fermer]\r\n"),
-			    WTERMSIG(status));
+			note = g_strdup_printf(_("killed by signal %d — "
+			    "Ctrl+Shift+W to close"), WTERMSIG(status));
+		msg = g_strdup_printf("\r\n[%s]\r\n", note);
+		g_free(note);
 		vte_terminal_feed(term, msg, -1);
 		g_free(msg);
 		g_object_set_data(G_OBJECT(term), "tazterm-exit",

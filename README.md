@@ -3,25 +3,28 @@
 Terminal moderne construit depuis zéro en **C + GTK3 + VTE** :
 léger comme la stack SliTaz actuelle, splits multi-shell dans une seule
 fenêtre (`GtkPaned` récursif), et pragmatiquement **AI friendly**
-(détection `opencode` / `claude` / `navette`, split agent dédié, capture
-du scrollback pour expliquer une erreur).
+(split agent, barre d'état par panneau, blocs de commande bash,
+`tazterm ctl` : l'agent lit les panneaux, en lecture seule).
 
-État : **E5 — packagé** (`tazterm 0.5`, 8 fichiers, gettext + icône).
-Voir `BOOTSTRAP.md` pour la feuille de route E1→E5.
+État : **0.6** — collage sûr, capture du vrai scrollback, `tazterm ctl`,
+blocs de commande, barre d'état, liens `Ctrl+clic`, compatibilité xterm
+(`-e`), `make check`. Historique E1→E5 : `BOOTSTRAP.md`.
 
 ## Install
 
 ```sh
 # Depuis le wok (recette dans /home/slitaz/wok/tazterm)
 sudo cook tazterm
-sudo tazpkg install /home/slitaz/packages/tazterm-0.5-x86_64.tazpkg
+sudo spk-add /home/slitaz/packages/tazterm-0.6-x86_64.tazpkg
 
 # Ou build direct
 sudo spk-add gtk+3-dev vte291-dev pkg-config gettext-tools
-cd src && make && ./tazterm
+make && ./src/tazterm
+make check            # tests (Xvfb, headless)
+sudo make install     # installation live, hors tazpkg
 ```
 
-## Usage (E5)
+## Usage
 
 - `Ctrl+Shift+C` / `Ctrl+Shift+V` : copier / coller (panneau actif)
 - `Ctrl+Shift+Q` : quitter (tous les panneaux)

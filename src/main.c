@@ -84,20 +84,20 @@ main(int argc, char *argv[])
 	char **command;
 	GOptionEntry entries[] = {
 		{ "working-directory", 'd', 0, G_OPTION_ARG_STRING,
-		  &opt_workdir, N_("Dossier de demarrage du shell"),
-		  N_("DOSSIER") },
+		  &opt_workdir, N_("Shell start directory"),
+		  N_("DIR") },
 		{ "shell", 's', 0, G_OPTION_ARG_STRING,
-		  &opt_shell, N_("Shell a lancer (defaut : /bin/sh)"),
+		  &opt_shell, N_("Shell to run (default: /bin/sh)"),
 		  N_("SHELL") },
 		{ "title", 'T', 0, G_OPTION_ARG_STRING,
-		  &opt_title, N_("Titre de la fenetre"), N_("TITRE") },
+		  &opt_title, N_("Window title"), N_("TITLE") },
 		{ "geometry", 0, 0, G_OPTION_ARG_STRING,
-		  &opt_geometry, N_("Taille en caracteres (80x24[+X+Y])"),
-		  N_("GEOMETRIE") },
+		  &opt_geometry, N_("Size in characters (80x24[+X+Y])"),
+		  N_("GEOMETRY") },
 		{ "hold", 'H', 0, G_OPTION_ARG_NONE,
-		  &opt_hold, N_("Garder la fenetre apres la fin de -e"), NULL },
+		  &opt_hold, N_("Keep the window after the -e command ends"), NULL },
 		{ "version", 'v', 0, G_OPTION_ARG_NONE,
-		  &opt_version, N_("Afficher la version"), NULL },
+		  &opt_version, N_("Show the version"), NULL },
 		{ NULL }
 	};
 
@@ -123,8 +123,8 @@ main(int argc, char *argv[])
 	argv_normalize(argc, argv);
 	command = argv_take_command(&argc, argv, cfg);
 
-	ctx = g_option_context_new(_("[-e COMMANDE [ARGS...]] - terminal "
-	    "leger GTK3/VTE"));
+	ctx = g_option_context_new(
+	    _("[-e COMMAND [ARGS...]] - light GTK3/VTE terminal"));
 	g_option_context_add_main_entries(ctx, entries, GETTEXT_PACKAGE);
 	/* FALSE: no display needed to parse (-v works over SSH);
 	 * gtk_init_check() opens it below. */

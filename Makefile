@@ -18,16 +18,21 @@ install: all
 	$(MAKE) -C src install DESTDIR=$(DESTDIR) PREFIX=$(PREFIX)
 	$(MAKE) -C po install DESTDIR=$(DESTDIR) PREFIX=$(PREFIX)
 	install -Dm644 data/tazterm.desktop $(DESTDIR)$(PREFIX)/share/applications/tazterm.desktop
+	install -Dm644 data/tazterm.1 $(DESTDIR)$(PREFIX)/share/man/man1/tazterm.1
 	install -Dm644 data/icons/hicolor/scalable/apps/tazterm.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/tazterm.svg
 	for s in 22 24 32 48; do \
 		install -Dm644 data/icons/hicolor/$${s}x$${s}/apps/tazterm.png \
 			$(DESTDIR)$(PREFIX)/share/icons/hicolor/$${s}x$${s}/apps/tazterm.png; \
 	done
-	gtk-update-icon-cache -q -t -f $(DESTDIR)$(PREFIX)/share/icons/hicolor 2>/dev/null || true
+	# Live install only: a cache inside DESTDIR would ship in the
+	# package and clash with the system one (post_install updates it).
+	[ -n "$(DESTDIR)" ] || gtk-update-icon-cache -q -t -f \
+		$(PREFIX)/share/icons/hicolor 2>/dev/null || true
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/tazterm
 	rm -f $(DESTDIR)$(PREFIX)/share/applications/tazterm.desktop
+	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/tazterm.1
 	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/tazterm.svg
 	for s in 22 24 32 48; do \
 		rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/$${s}x$${s}/apps/tazterm.png; \
