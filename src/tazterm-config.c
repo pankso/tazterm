@@ -75,6 +75,9 @@ static const char default_conf[] =
 "status_bar=true\n"
 "# Ask before closing a pane/window where a program still runs\n"
 "confirm_close=true\n"
+"# A command running this long (seconds, bash) that ends in a pane you\n"
+"# are not looking at: orange outline + urgency hint. 0 = never\n"
+"notify_after=30\n"
 "\n"
 "[ai]\n"
 "# auto (first found) | opencode | claude | navette\n"
@@ -120,6 +123,7 @@ tazterm_config_load(void)
 	cfg->ai_redact = TRUE;
 	cfg->status_bar = TRUE;
 	cfg->confirm_close = TRUE;
+	cfg->notify_after = 30;
 
 	path = tazterm_config_path();
 	kf = g_key_file_new();
@@ -215,6 +219,13 @@ tazterm_config_load(void)
 	if (g_key_file_has_key(kf, "terminal", "confirm_close", NULL))
 		cfg->confirm_close = g_key_file_get_boolean(kf, "terminal",
 		    "confirm_close", NULL);
+
+	if (g_key_file_has_key(kf, "terminal", "notify_after", NULL)) {
+		cfg->notify_after = g_key_file_get_integer(kf, "terminal",
+		    "notify_after", NULL);
+		if (cfg->notify_after < 0)
+			cfg->notify_after = 0;
+	}
 
 	if (g_key_file_has_key(kf, "ai", "redact", NULL))
 		cfg->ai_redact = g_key_file_get_boolean(kf, "ai", "redact",

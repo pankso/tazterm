@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tazterm\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-24 20:46+0200\n"
+"POT-Creation-Date: 2026-09-24 22:17+0200\n"
 "PO-Revision-Date: 2026-09-24 20:00+0200\n"
 "Last-Translator: SliTaz Contributors\n"
 "Language-Team: French\n"
@@ -29,7 +29,7 @@ msgstr "Fermer TazTerm ?"
 msgid "Still running: %s. It will be stopped."
 msgstr "Encore en cours : %s. Il sera arrêté."
 
-#: src/tazterm-window.c:356 src/tazterm-term.c:843
+#: src/tazterm-window.c:356 src/tazterm-term.c:846
 msgid "Cancel"
 msgstr "Annuler"
 
@@ -41,7 +41,7 @@ msgstr "Fermer"
 msgid "Copy"
 msgstr "Copier"
 
-#: src/tazterm-window.c:703 src/tazterm-term.c:844
+#: src/tazterm-window.c:703 src/tazterm-term.c:847
 msgid "Paste"
 msgstr "Coller"
 
@@ -103,63 +103,67 @@ msgstr "Taille normale"
 msgid "Fullscreen"
 msgstr "Plein écran"
 
-#: src/tazterm-window.c:1222
+#: src/tazterm-window.c:1224
 msgid "agent"
 msgstr "agent"
 
-#: src/tazterm-window.c:1222
+#: src/tazterm-window.c:1224
 msgid "shell"
 msgstr "shell"
 
-#: src/tazterm-window.c:1222
+#: src/tazterm-window.c:1224
 msgid "command"
 msgstr "commande"
 
-#: src/tazterm-window.c:1233
+#: src/tazterm-window.c:1235
 #, c-format
 msgid "done (exit %d)"
 msgstr "terminé (code %d)"
 
-#: src/tazterm-window.c:1234
+#: src/tazterm-window.c:1236
 msgid "done (signal)"
 msgstr "terminé (signal)"
 
-#: src/tazterm-window.c:1237
+#: src/tazterm-window.c:1239
 msgid "waiting for you"
 msgstr "attend une réponse"
 
-#: src/tazterm-window.c:1242 src/tazterm-window.c:1247
-msgid "active"
-msgstr "actif"
+#: src/tazterm-window.c:1243 src/tazterm-window.c:1246
+msgid "done"
+msgstr "fini"
 
-#: src/tazterm-window.c:1243
-msgid "running"
-msgstr "en cours"
-
-#: src/tazterm-window.c:1247
-msgid "working"
-msgstr "travaille"
-
-#: src/tazterm-window.c:1250
+#: src/tazterm-window.c:1246 src/tazterm-window.c:1259
 msgid "exit"
 msgstr "code"
 
+#: src/tazterm-window.c:1251 src/tazterm-window.c:1256
+msgid "active"
+msgstr "actif"
+
 #: src/tazterm-window.c:1252
+msgid "running"
+msgstr "en cours"
+
+#: src/tazterm-window.c:1256
+msgid "working"
+msgstr "travaille"
+
+#: src/tazterm-window.c:1261
 #, c-format
 msgid "idle · %s"
 msgstr "en attente · %s"
 
-#: src/tazterm-window.c:1254
+#: src/tazterm-window.c:1263
 #, c-format
 msgid "quiet · %s"
 msgstr "silencieux · %s"
 
-#: src/tazterm-window.c:1329
+#: src/tazterm-window.c:1365
 #, c-format
 msgid "exited with code %d — Ctrl+Shift+W to close"
 msgstr "terminé, code %d — Ctrl+Shift+W pour fermer"
 
-#: src/tazterm-window.c:1332
+#: src/tazterm-window.c:1368
 #, c-format
 msgid "killed by signal %d — Ctrl+Shift+W to close"
 msgstr "tué par le signal %d — Ctrl+Shift+W pour fermer"
@@ -208,11 +212,11 @@ msgstr "Afficher la version"
 msgid "[-e COMMAND [ARGS...]] - light GTK3/VTE terminal"
 msgstr "[-e COMMANDE [ARGS...]] - terminal léger GTK3/VTE"
 
-#: src/tazterm-term.c:836
+#: src/tazterm-term.c:839
 #, c-format
 msgid "Paste %u lines into the shell?"
 msgstr "Coller %u lignes dans le shell ?"
 
-#: src/tazterm-term.c:839
+#: src/tazterm-term.c:842
 msgid "This shell runs each line as soon as it is pasted."
 msgstr "Ce shell exécute chaque ligne dès qu'elle est collée."

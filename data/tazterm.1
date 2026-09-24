@@ -72,6 +72,11 @@ Open a URL with $BROWSER, or \fIfile\fR:\fIline\fR in a terminal editor.
 .TP
 .B Ctrl+Plus / Minus / 0, F11
 Zoom, fullscreen.
+.SH ALERTS
+A bell (BEL) from a pane you are not in, or a command of at least
+\fBnotify_after\fR seconds (30, bash panes) that ends out of sight,
+outlines the pane in orange and sets the window urgency hint when it
+is not focused.
 .SH PASTE
 Control characters are stripped. A multi-line paste into a shell
 without bracketed paste (busybox ash), where each line would run at

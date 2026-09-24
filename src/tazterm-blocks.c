@@ -92,15 +92,22 @@ typedef struct {
 	gint64 start;    /* last PS0 start mark, 0 = none */
 } Blocks;
 
-static void (*listener)(VteTerminal *, gpointer);
-static gpointer listener_data;
+typedef struct {
+	void (*fn)(VteTerminal *, gpointer);
+	gpointer data;
+} Listener;
+
+static GSList *listeners;
 
 void
-tazterm_blocks_set_listener(void (*fn)(VteTerminal *term, gpointer data),
+tazterm_blocks_add_listener(void (*fn)(VteTerminal *term, gpointer data),
     gpointer data)
 {
-	listener = fn;
-	listener_data = data;
+	Listener *l = g_new0(Listener, 1);
+
+	l->fn = fn;
+	l->data = data;
+	listeners = g_slist_append(listeners, l);
 }
 
 static void
@@ -170,12 +177,15 @@ on_file_uri(VteTerminal *term, gpointer data)
 	if (tazterm_debug())
 		g_printerr("tazterm: mark pane %d row %ld exit %d\n",
 		    tazterm_term_get_id(term), m.row, m.exit);
-	if (listener && b->marks->len >= 2) {
+	if (listeners && b->marks->len >= 2) {
 		TaztermBlock *last = tazterm_blocks_last(term);
+		GSList *l;
 
 		/* Enter on an empty line is no command. */
 		if (last && *last->command)
-			listener(term, listener_data);
+			for (l = listeners; l; l = l->next)
+				((Listener *) l->data)->fn(term,
+				    ((Listener *) l->data)->data);
 		tazterm_block_free(last);
 	}
 out:
@@ -316,6 +326,16 @@ tazterm_blocks_last_exit(VteTerminal *term)
 	if (!b || b->marks->len < 2)
 		return -1;
 	return g_array_index(b->marks, Mark, b->marks->len - 1).exit;
+}
+
+int
+tazterm_blocks_last_seconds(VteTerminal *term)
+{
+	Blocks *b = blocks_of(term);
+
+	if (!b || b->marks->len < 2)
+		return -1;
+	return g_array_index(b->marks, Mark, b->marks->len - 1).seconds;
 }
 
 int

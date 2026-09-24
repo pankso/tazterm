@@ -35,6 +35,7 @@ sudo make install     # installation live, hors tazpkg
 - `Ctrl+clic` sur une URL : `$BROWSER` (sinon l'application GIO par défaut) ; sur `fichier:ligne[:col]` (gcc, grep -n, traceback, agents) : ouvre l'éditeur dans un split, depuis le dossier du panneau (`[terminal] editor=`, sinon `$VISUAL`, sinon `$EDITOR` s'il tourne en terminal, sinon `vi`)
 - Fermer un panneau (`Ctrl+Shift+W`) ou la fenêtre (`Ctrl+Shift+Q`, bouton du WM) où un programme tourne encore (agent, vim, build) demande confirmation (`[terminal] confirm_close=false` pour désactiver)
 - Barre d'état sous chaque panneau : `id · rôle · processus · dossier` et, à droite, l'activité (● actif / ● travaille pour un agent, en attente · 3m, ● attend une réponse après un BEL, terminé (code N)). `[terminal] status_bar=false` pour la masquer
+- Commande longue (≥ `notify_after`, 30 s par défaut, panneaux bash) terminée dans un panneau que tu ne regardes pas : contour orange, urgence si la fenêtre n'a pas le focus, « ✓ fini » ou « ✗ code N · fini » dans la barre jusqu'à ce que tu y ailles (`done N` dans `ctl ls`)
 - Un panneau en arrière-plan qui sonne (BEL : agent qui attend une permission ou a fini, `make; printf '\a'`) prend un contour orange jusqu'à ce qu'on y aille ; fenêtre sans focus → urgence (barre des tâches). Claude Code : `/config` → notifications = `terminal_bell`
 - `Ctrl+Shift+F` : afficher / masquer la recherche (suit le panneau actif)
 - `F11` ou clic droit → `Plein écran` : basculer le plein écran
@@ -131,7 +132,8 @@ explain_lines=200
 capture_lines=2000
 redact=true
 ```
-- Shell : `shell=auto` par défaut = bash s'il est installé (blocs de commande, `ctl read -l`/`wait`, codes retour), sinon `/bin/sh` (busybox ash) ; `-s SHELL` ou `TAZTERM_SHELL` pour forcer
+
+Section `[terminal]` aussi : `status_bar`, `confirm_close`, `notify_after=30` (0 = jamais), `editor`.
 
 ## Layout
 

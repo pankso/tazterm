@@ -50,6 +50,9 @@ char *tazterm_block_format(const TaztermBlock *b);
 /* Exit code of the last command, -1 when none (cheap: no text). */
 int tazterm_blocks_last_exit(VteTerminal *term);
 
+/* Run time of the last command in seconds, -1 unknown (cheap). */
+int tazterm_blocks_last_seconds(VteTerminal *term);
+
 /* Seconds the current command has been running, -1 at the prompt. */
 int tazterm_blocks_running(VteTerminal *term);
 
@@ -58,8 +61,8 @@ int tazterm_blocks_running(VteTerminal *term);
 gboolean tazterm_blocks_prompt_row(VteTerminal *term, glong row, int dir,
     glong *out);
 
-/* Called on every completed block (ctl wait). One listener. */
-void tazterm_blocks_set_listener(void (*fn)(VteTerminal *term,
+/* Called on every completed block (ctl wait, long-command alert). */
+void tazterm_blocks_add_listener(void (*fn)(VteTerminal *term,
     gpointer data), gpointer data);
 
 G_END_DECLS

@@ -1130,8 +1130,9 @@ on_pane_focus(VteTerminal *term, gpointer data)
 	const char *text;
 
 	title_update(tw, term);
-	/* The user is here: the bell has been seen. */
+	/* The user is here: the bell / the finished command are seen. */
 	g_object_set_data(G_OBJECT(term), "tazterm-bell", NULL);
+	g_object_set_data(G_OBJECT(term), "tazterm-done", NULL);
 	status_update(term);
 	/* Open search follows the active pane. */
 	if (search_is_shown(tw)) {
@@ -1146,7 +1147,8 @@ on_pane_focus(VteTerminal *term, gpointer data)
 /* Pane state kept as object data on the terminal:
  *   tazterm-last-output  monotonic seconds of the last screen change
  *   tazterm-bell         BEL not seen yet by the user
- *   tazterm-exit         held pane: wait status + 1 */
+ *   tazterm-exit         held pane: wait status + 1
+ *   tazterm-done         long command ended out of sight: exit + 1 */
 #define STATUS_BUSY_SECS 2
 
 static int
@@ -1202,7 +1204,7 @@ status_update(VteTerminal *term)
 	const char *shell_path;
 	const char *base;
 	char *rtext;
-	int idle, exitst, running, last_exit;
+	int idle, exitst, running, last_exit, done;
 
 	left = g_object_get_data(G_OBJECT(term), "tazterm-status-left");
 	right = g_object_get_data(G_OBJECT(term), "tazterm-status-right");
@@ -1235,6 +1237,13 @@ status_update(VteTerminal *term)
 	else if (g_object_get_data(G_OBJECT(term), "tazterm-bell"))
 		rtext = g_strdup_printf("<span foreground=\"#f57900\">● %s"
 		    "</span>", _("waiting for you"));
+	else if ((done = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(term),
+	    "tazterm-done"))) == 1)
+		rtext = g_strdup_printf("<span foreground=\"#73d216\">✓ %s"
+		    "</span>", _("done"));
+	else if (done > 1)
+		rtext = g_strdup_printf("<span foreground=\"#ef2929\">✗ %s "
+		    "%d · %s</span>", _("exit"), done - 1, _("done"));
 	else if ((running = tazterm_blocks_running(term)) >= 0) {
 		char *rage = fmt_age(running);
 
@@ -1304,6 +1313,33 @@ on_bell(VteTerminal *term, gpointer data)
 		gtk_window_set_urgency_hint(GTK_WINDOW(tw->win), TRUE);
 	if (tazterm_debug())
 		g_printerr("tazterm: bell pane %d\n", tazterm_term_get_id(term));
+}
+
+/* A command of notify_after seconds or more ended where the user is not
+ * looking (another pane, or the window not focused): same alert as a
+ * bell, the status bar says done / exit N until the pane is visited. */
+static void
+on_block_finished(VteTerminal *term, gpointer data)
+{
+	TaztermWin *tw = TW(data);
+	int secs, ec;
+
+	secs = tazterm_blocks_last_seconds(term);
+	if (tw->cfg->notify_after <= 0 || secs < tw->cfg->notify_after)
+		return;
+	if (term == tazterm_split_active_term(tw->split) &&
+	    gtk_window_is_active(GTK_WINDOW(tw->win)))
+		return;
+	ec = tazterm_blocks_last_exit(term);
+	g_object_set_data(G_OBJECT(term), "tazterm-done",
+	    GINT_TO_POINTER(ec + 1));
+	tazterm_split_attention(tw->split, term);
+	if (!gtk_window_is_active(GTK_WINDOW(tw->win)))
+		gtk_window_set_urgency_hint(GTK_WINDOW(tw->win), TRUE);
+	status_update(term);
+	if (tazterm_debug())
+		g_printerr("tazterm: long command done pane %d (%ds, exit %d)\n",
+		    tazterm_term_get_id(term), secs, ec);
 }
 
 static gboolean
@@ -1446,6 +1482,7 @@ tazterm_window_new(TaztermConfig *cfg, const TaztermWinOpts *opts)
 
 	/* Before the first pane: its env gets TAZTERM_SOCKET. */
 	tazterm_ctl_start(cfg);
+	tazterm_blocks_add_listener(on_block_finished, tw);
 
 	hooks.term_setup = term_setup;
 	hooks.term_setup_data = tw;

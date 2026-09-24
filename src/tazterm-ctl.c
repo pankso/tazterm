@@ -148,7 +148,7 @@ pane_role(VteTerminal *t)
 
 /* What an orchestrating agent wants to know: is that pane still busy?
  * busy (output in the last 2 s), idle Ns, bell (wants the user),
- * exited N (held pane). State set by the window's status bar code. */
+ * done N (long command ended unseen), exited N (held pane). State set by the window's status bar code. */
 static char *
 pane_activity(VteTerminal *t)
 {
@@ -161,6 +161,10 @@ pane_activity(VteTerminal *t)
 		    WEXITSTATUS(exitst - 1) : 128 + WTERMSIG(exitst - 1));
 	if (g_object_get_data(G_OBJECT(t), "tazterm-bell"))
 		return g_strdup("bell");
+	exitst = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(t),
+	    "tazterm-done"));
+	if (exitst)
+		return g_strdup_printf("done %d", exitst - 1);
 	last = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(t),
 	    "tazterm-last-output"));
 	idle = (int) (g_get_monotonic_time() / G_USEC_PER_SEC) - last;
@@ -684,7 +688,7 @@ tazterm_ctl_start(TaztermConfig *cfg)
 		return FALSE;
 	}
 	g_signal_connect(service, "incoming", G_CALLBACK(on_incoming), NULL);
-	tazterm_blocks_set_listener(on_block_done, NULL);
+	tazterm_blocks_add_listener(on_block_done, NULL);
 	g_socket_service_start(service);
 	tazterm_term_set_ctl_socket(sock_path);
 	if (tazterm_debug())

@@ -18,6 +18,8 @@ typedef struct {
 	gboolean bg_set;
 	gboolean status_bar;   /* per-pane status line, default TRUE */
 	gboolean confirm_close; /* ask before killing a running program */
+	int notify_after;      /* alert when a command this long (s) ends
+	                        * out of sight, 0 = never */
 	char *ai_agent;    /* "auto" or opencode|claude|navette */
 	int ai_explain_lines;  /* default 200 */
 	int ai_capture_lines;  /* default 2000 */
