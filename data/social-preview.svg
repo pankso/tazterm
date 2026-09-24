@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GitHub social preview (1280x640): rsvg-convert -w 1280 -h 640 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <rect width="1280" height="640" fill="#15171b"/>
+
+  <!-- The tazterm icon, scaled -->
+  <svg x="90" y="150" width="300" height="300" viewBox="0 0 48 48">
+    <rect x="2" y="4" width="44" height="40" rx="6" fill="#1c1e22"/>
+    <rect x="2" y="4" width="44" height="40" rx="6" fill="none" stroke="#3a3d44" stroke-width="2"/>
+    <rect x="23" y="8" width="2" height="32" fill="#3a3d44"/>
+    <text x="7" y="30" font-family="DejaVu Sans Mono" font-size="14" font-weight="bold" fill="#d45500">&gt;_</text>
+    <circle cx="38" cy="14" r="3" fill="#78a348"/>
+  </svg>
+
+  <!-- Name and tagline -->
+  <text x="460" y="205" font-family="DejaVu Sans" font-size="92" font-weight="bold" fill="#e6e8ed">TazTerm</text>
+  <text x="462" y="262" font-family="DejaVu Sans" font-size="36" fill="#b8bec8">Light GTK3/VTE terminal</text>
+  <text x="462" y="308" font-family="DejaVu Sans" font-size="36" fill="#b8bec8">made for AI coding agents</text>
+
+  <!-- A pane: the agent reads the user's last command -->
+  <rect x="460" y="350" width="730" height="176" rx="10" fill="#1c1e22" stroke="#3a3d44" stroke-width="2"/>
+  <g font-family="DejaVu Sans Mono" font-size="24">
+    <text x="486" y="392"><tspan fill="#d45500">$</tspan><tspan fill="#e6e8ed"> tazterm ctl read -l</tspan></text>
+    <text x="486" y="428" fill="#8a919c">$ make</text>
+    <text x="486" y="464" fill="#8a919c">src/main.c:42: error: 'cfg' undeclared</text>
+    <text x="486" y="500" fill="#ef2929">[exit 2, 3s]</text>
+  </g>
+  <circle cx="1160" cy="378" r="7" fill="#78a348"/>
+
+  <!-- Footer -->
+  <text x="90" y="592" font-family="DejaVu Sans" font-size="24" fill="#8a919c">From SliTaz GNU/Linux  ·  C, GTK3, VTE  ·  ~24 MB RAM  ·  BSD</text>
+</svg>
