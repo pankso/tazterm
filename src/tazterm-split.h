@@ -1,3 +1,10 @@
+/*
+ * TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+ * Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+ *
+ * Engineer: Christophe Lincoln <pankso@slitaz.org>
+ * Coding assistants: OpenCode & Claude
+ */
 /* tazterm-split.h — Pane container (recursive GtkPaned tree).
  *
  * Each leaf = a VteTerminal with its own shell. The split owns the state

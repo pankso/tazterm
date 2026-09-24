@@ -1,3 +1,10 @@
+/*
+ * TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+ * Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+ *
+ * Engineer: Christophe Lincoln <pankso@slitaz.org>
+ * Coding assistants: OpenCode & Claude
+ */
 /* unit.c — Pure functions, no display: redaction, paste sanitizer,
  * command parsing. Exit status = number of failures. */
 #include <stdio.h>

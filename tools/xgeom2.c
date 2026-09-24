@@ -1,3 +1,10 @@
+/*
+ * TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+ * Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+ *
+ * Engineer: Christophe Lincoln <pankso@slitaz.org>
+ * Coding assistants: OpenCode & Claude
+ */
 /* xgeom2: frame geometry of a window by name substring (recreation).
  * Walks up with XQueryTree for screen coords. Temp tool. */
 #include <X11/Xlib.h>

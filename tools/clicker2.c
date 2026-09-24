@@ -1,3 +1,10 @@
+/*
+ * TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+ * Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+ *
+ * Engineer: Christophe Lincoln <pankso@slitaz.org>
+ * Coding assistants: OpenCode & Claude
+ */
 /* clicker2: XTest click at X Y [ms] (recreation post-reboot). Temp tool. */
 #include <X11/Xlib.h>
 #include <X11/extensions/XTest.h>

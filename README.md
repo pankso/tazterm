@@ -1,161 +1,122 @@
-# TazTerm — terminal GTK3/VTE pour SliTaz, avec splits et copilote IA
+# TazTerm
 
-Terminal moderne construit depuis zéro en **C + GTK3 + VTE** :
-léger comme la stack SliTaz actuelle, splits multi-shell dans une seule
-fenêtre (`GtkPaned` récursif), et pragmatiquement **AI friendly**
-(split agent, barre d'état par panneau, blocs de commande bash,
-`tazterm ctl` : l'agent lit les panneaux, en lecture seule).
+A light GTK3/VTE terminal with split panes, made for working with AI coding agents. Written in C, one binary, about 24 MB of RAM for a window, no daemon, no cloud, no account.
 
-État : **0.6** — collage sûr, capture du vrai scrollback, `tazterm ctl`,
-blocs de commande, barre d'état, liens `Ctrl+clic`, compatibilité xterm
-(`-e`), `make check`. Historique E1→E5 : `BOOTSTRAP.md`.
+TazTerm is the terminal of [SliTaz GNU/Linux](https://www.slitaz.org), a tiny distribution with 20 years of experience in doing more with less. It is developed and used every day on SliTaz itself, to build packages, ISOs and the tools of the distribution, with agents such as Claude Code, opencode and navette running in split panes next to the shells.
 
-## Install
+## Why
 
-```sh
-# Depuis le wok (recette dans /home/slitaz/wok/tazterm)
-sudo cook tazterm
-sudo spk-add /home/slitaz/packages/tazterm-0.6-x86_64.tazpkg
+Coding agents run in a terminal, and the first thing they ask is "paste me the error". TazTerm lets them look for themselves, safely:
 
-# Ou build direct
-sudo spk-add gtk+3-dev vte291-dev pkg-config gettext-tools
-make && ./src/tazterm
-make check            # tests (Xvfb, headless)
-sudo make install     # installation live, hors tazpkg
-```
+- **The agent reads your panes.** `tazterm ctl read` gives an agent the output of the pane you were just in, `tazterm ctl read -l` the exact last command with its exit code. No copy and paste.
+- **Read-only by design.** An agent can look at your panes, never type into them. Terminal output comes from anywhere (logs, `curl`, a cloned README) and can carry prompt injections: writing to a shell stays a human action.
+- **Secrets stay home.** Private keys, API tokens and `password=` values are masked as `[REDACTED]` before anything reaches an agent.
+- **You know who needs you.** Each pane has a status line (working, waiting, exit code, running for 2m). A pane that rings the bell, or a long command that ends while you look elsewhere, gets an orange outline and the window an urgency hint.
+- **Light.** C, GTK3 and VTE, nothing else. It runs on the old 32-bit machines SliTaz supports and leaves the RAM to local models on newer ones.
 
-## Usage
+## Features
 
-- `Ctrl+Shift+C` / `Ctrl+Shift+V` : copier / coller (panneau actif)
-- `Ctrl+Shift+Q` : quitter (tous les panneaux)
-- `Ctrl+Shift+E` : diviser côte à côte
-- `Ctrl+Shift+O` : diviser empilés
-- `Ctrl+Shift+W` : fermer le panneau courant (dernier → quitte)
-- `Alt+Flèches` : focus au panneau voisin (bordure bleue = actif)
-- `Ctrl+clic` sur une URL : `$BROWSER` (sinon l'application GIO par défaut) ; sur `fichier:ligne[:col]` (gcc, grep -n, traceback, agents) : ouvre l'éditeur dans un split, depuis le dossier du panneau (`[terminal] editor=`, sinon `$VISUAL`, sinon `$EDITOR` s'il tourne en terminal, sinon `vi`)
-- Fermer un panneau (`Ctrl+Shift+W`) ou la fenêtre (`Ctrl+Shift+Q`, bouton du WM) où un programme tourne encore (agent, vim, build) demande confirmation (`[terminal] confirm_close=false` pour désactiver)
-- Barre d'état sous chaque panneau : `id · rôle · processus · dossier` et, à droite, l'activité (● actif / ● travaille pour un agent, en attente · 3m, ● attend une réponse après un BEL, terminé (code N)). `[terminal] status_bar=false` pour la masquer
-- Commande longue (≥ `notify_after`, 30 s par défaut, panneaux bash) terminée dans un panneau que tu ne regardes pas : contour orange, urgence si la fenêtre n'a pas le focus, « ✓ fini » ou « ✗ code N · fini » dans la barre jusqu'à ce que tu y ailles (`done N` dans `ctl ls`)
-- Un panneau en arrière-plan qui sonne (BEL : agent qui attend une permission ou a fini, `make; printf '\a'`) prend un contour orange jusqu'à ce qu'on y aille ; fenêtre sans focus → urgence (barre des tâches). Claude Code : `/config` → notifications = `terminal_bell`
-- `Ctrl+Shift+F` : afficher / masquer la recherche (suit le panneau actif)
-- `F11` ou clic droit → `Plein écran` : basculer le plein écran
-- `Ctrl+Shift+A` : ouvrir un split agent IA (agent par défaut)
-- `Ctrl+Shift+T` ou clic droit → `Envoyer à l'agent` : coller la sélection du panneau courant dans le panneau agent (sans Entrée : on ajoute sa question puis on valide)
-- Clic droit → `Ouvrir un split agent (…)` : défaut, ou `Split agent : claude`
-  / `Split agent : navette` pour les autres agents détectés
-- `Ctrl+Shift+S` : copier le scrollback (`capture_lines` dernières lignes, presse-papier seulement, rien sur disque)
-- `Ctrl+Shift+X` : expliquer la dernière erreur (`explain_lines` dernières lignes, collées dans le panneau agent sans Entrée + presse-papier)
-- Collage (`Ctrl+Shift+V`) : caractères de contrôle retirés ; un collage multi-ligne dans un shell sans bracketed paste (busybox ash) demande confirmation, car chaque ligne s'y exécuterait
+- Split panes in one window (side by side, stacked, keyboard navigation), window-wide zoom, fullscreen, search
+- Per-pane status line: id, role (shell, agent, command), foreground process, directory, activity
+- Command blocks for bash: every command with its output, exit code and duration; jump from prompt to prompt
+- `tazterm ctl`: `ls`, `read`, `read -l`, `blocks`, `wait`, `notify`, `guide`
+- Agent panes: detects claude, opencode and navette, opens one in a split, sends a selection or the last failed command to it (never submitted: you add your question)
+- Safe paste: control characters stripped, bracketed paste handled by VTE, confirmation before a multi-line paste into a shell that would run every line
+- Ctrl+click on URLs and on `file:line[:col]` (compilers, `grep -n`, tracebacks) to open your terminal editor at that line
+- Confirmation before closing a pane or the window where a program still runs
+- xterm-compatible command line: `-e`, `-T`, `-geometry`, `-hold`, `--class`
+- `make check`: unit tests, GUI scenarios on Xvfb, end-to-end tests of the control socket
 
-## Agents IA : opencode, claude, navette
+## tazterm ctl
 
-Détection automatique au PATH (`agents: ...` dans `TAZTERM_DEBUG=1`).
-`Ctrl+Shift+A` ouvre un split et y lance l'agent par défaut
-(config `[ai] agent=auto|opencode|claude|navette`, `TAZTERM_AGENT_CMD`
-force la commande — pratique pour tester). La capture lit le texte brut
-du pty : aucun changement requis côté agent, `navette` (one-shot comme
-TUI) marche tel quel.
-
-## tazterm ctl : l'agent lit les panneaux
-
-Chaque panneau exporte `TAZTERM_SOCKET`, `TAZTERM_PANE` (id du panneau)
-et `TERM_PROGRAM=tazterm`. Tout agent qui sait lancer une commande
-(claude, opencode, navette) peut lire ce que l'utilisateur voit, sans
-copier-coller :
+Every pane exports `TERM_PROGRAM=tazterm`, `TAZTERM_PANE` and `TAZTERM_SOCKET`. Any agent able to run a shell command can use it:
 
 ```sh
-tazterm ctl ls              # id, rôle (shell/agent/cmd), état, processus, cwd, titre
-tazterm ctl read            # 200 dernières lignes du panneau d'où vient l'utilisateur
-tazterm ctl read -p 1 -n 50 # panneau 1, 50 lignes (-a : tout le scrollback)
-tazterm ctl notify "fini"   # contour orange du panneau + fenêtre en urgence
-tazterm ctl read -l         # dernière commande : commande, sortie, [exit N, durée]
-tazterm ctl blocks          # commandes récentes : n°, code, secondes, commande
-tazterm ctl wait -t 600     # attend la fin de la prochaine commande, sort avec son code
+tazterm ctl ls              # panes: id, role, state, activity, process, cwd, title
+tazterm ctl read            # last 200 lines of the pane you came from
+tazterm ctl read -l         # its last command: command, output, [exit N, 3s]
+tazterm ctl blocks          # recent commands with exit codes and durations
+tazterm ctl wait            # wait for the next command there to end, exit with its status
+tazterm ctl notify "done"   # outline the agent's pane, set the urgency hint
+tazterm ctl guide           # how an agent should use all this (markdown)
 ```
 
-**Blocs de commande (panneaux bash)** : tazterm lance bash avec
-`--rcfile ~/.config/tazterm/bash-integration.sh`, qui source `~/.bashrc`
-puis marque chaque prompt (OSC 6 avec un jeton par panneau : un `cat`
-de fichier ne peut pas forger de faux blocs). Donne `read -l`, `blocks`,
-`wait`, `Ctrl+Shift+X` sur la dernière commande exacte,
-`Ctrl+Shift+↑/↓` pour sauter de prompt en prompt, et « ✗ code N » /
-« en cours · 2m » dans la barre d'état. busybox ash n'a aucun hook de
-prompt : pas de blocs, `read -n` reste disponible.
+`wait` lets an agent say "run `make` in your pane" and get the result without running anything itself.
 
-- **Lecture seule** : un agent ne peut jamais taper dans un panneau.
-  La sortie terminal n'est pas fiable (curl, logs, README cloné) et un
-  agent qui la lit peut être manipulé : écrire reste un geste humain.
-- Secrets masqués (`[REDACTED]` : clés privées, jetons `sk-`/`ghp_`/`AKIA`…,
-  `password=`…) ; `[ai] redact=false` pour désactiver.
-- Socket `$XDG_RUNTIME_DIR/tazterm/PID.sock` (sinon `~/.cache/tazterm/`),
-  dossier 0700, uid du pair vérifié, supprimé à la fermeture.
-- Hors d'un panneau (agent lancé ailleurs) : `ctl` trouve le seul
-  tazterm lancé, ou demande `TAZTERM_SOCKET` s'il y en a plusieurs.
-
-À mettre dans le `CLAUDE.md` / `AGENTS.md` d'un projet :
+To teach your agent, add one line to your `CLAUDE.md` or `AGENTS.md`:
 
 ```
-If TERM_PROGRAM=tazterm, run `tazterm ctl guide` once: it explains how
-to read the user's panes instead of asking them to paste output.
+If TERM_PROGRAM=tazterm, run `tazterm ctl guide` once: it explains how to read the user's panes instead of asking them to paste output.
 ```
 
-`tazterm ctl guide` affiche le mode d'emploi pour agents (markdown,
-anglais), intégré au binaire donc toujours à jour.
+## Security model
 
-## Raccourcis de base
+- One Unix socket per window, in `$XDG_RUNTIME_DIR/tazterm/` (else `~/.cache/tazterm/`, else `/tmp/tazterm-UID/` when the path would be too long), directory 0700 checked for owner and symlinks, peer uid verified, removed on exit.
+- Read-only protocol, one request line, async I/O with timeouts: a stuck client never freezes the window.
+- Command block marks carry a random per-pane token: `cat` of a crafted file cannot forge blocks or exit codes.
+- Paste: C0 and C1 controls stripped, invalid UTF-8 repaired, 256 KiB cap; VTE adds bracketed paste only when the application asked for it.
+- Nothing written to disk: captures go to the clipboard or to the agent, never to `/tmp`.
+- OSC 7 only for local paths, `/proc` first; OSC 8 hyperlinks and window resize requests are not honored.
 
-- `Ctrl+Shift+C` / `Ctrl+Shift+V` : copier / coller
-- `Ctrl+Shift+Q` : quitter
-- `Ctrl+Shift+F` : afficher / masquer la recherche (Entrée = suivant, Shift+Entrée = précédent)
-- Fermer la recherche : `Échap` (dans le champ comme dans le terminal), bouton ✕, ou `Ctrl+Shift+F`
-- `Ctrl+Plus` / `Ctrl+Moins` / `Ctrl+0` : zoom avant / arrière / taille normale
-- Clic droit : menu complet (copier, coller, tout sélectionner, recherche, zoom)
-- `exit` dans le shell : ferme la fenêtre
-- Shell : `shell=auto` par défaut = bash s'il est installé (blocs de commande, `ctl read -l`/`wait`, codes retour), sinon `/bin/sh` (busybox ash) ; `-s SHELL` ou `TAZTERM_SHELL` pour forcer
-- Options : `-d DOSSIER`, `-s SHELL`, `-v`, et compatibles xterm (wrapper SliTaz `terminal`) : `-T TITRE`, `-geometry 80x24[+X+Y]`, `-hold`, `-e COMMANDE ARGS…` (tout ce qui suit `-e`, ou une seule chaîne `"htop -d 5"`), `--class`/`--name` (WM_CLASS)
-- Debug : `TAZTERM_DEBUG=1 tazterm` (logs spawn, zoom, recherche sur stderr)
+## Keys
 
-## Config : `~/.config/tazterm/tazterm.conf` (créé avec les défauts)
+| Keys | Action |
+|------|--------|
+| Ctrl+Shift+C / V | Copy / paste |
+| Ctrl+Shift+E / O | Split side by side / stacked |
+| Ctrl+Shift+W / Q | Close pane / window (asks when a program runs) |
+| Alt+Arrows | Move to the neighbor pane |
+| Ctrl+Shift+Up / Down | Previous / next prompt (bash) |
+| Ctrl+Shift+F | Find |
+| Ctrl+Shift+A | Open an agent split |
+| Ctrl+Shift+T | Send the selection to the agent |
+| Ctrl+Shift+X | Send the last command (or last lines) to the agent |
+| Ctrl+Shift+S | Copy the scrollback |
+| Ctrl+click | Open a URL or `file:line` |
+| Ctrl+Plus / Minus / 0, F11 | Zoom, fullscreen |
+
+## Configuration
+
+`~/.config/tazterm/tazterm.conf` is created on first run with every key and a comment:
 
 ```ini
 [terminal]
 font=Monospace 12
+# auto: bash when installed (command blocks), else /bin/sh
 shell=auto
 scrollback_lines=10000
-foreground=#e6e8ed
-background=#1c1e22
-#working_directory=/home/tux
+status_bar=true
+confirm_close=true
+# alert when a command this long (seconds) ends out of sight, 0 = never
+notify_after=30
+#editor=nano
 
 [ai]
+# auto | opencode | claude | navette
 agent=auto
 explain_lines=200
 capture_lines=2000
 redact=true
 ```
 
-Section `[terminal]` aussi : `status_bar`, `confirm_close`, `notify_after=30` (0 = jamais), `editor`.
+Command blocks need bash: busybox ash has no prompt hook. With `shell=auto`, tazterm starts bash with its own `--rcfile`, which sources your `~/.bashrc` first.
 
-## Layout
+## Build
 
+Requirements: GTK 3.22 or newer, VTE 0.56 or newer (`vte-2.91`), pkg-config, gettext.
+
+```sh
+make                 # binary in src/tazterm
+make check           # tests, needs Xvfb (uses display :7 unless TAZTERM_TEST_DISPLAY)
+sudo make install    # PREFIX=/usr by default
 ```
-tazterm/
-├── BOOTSTRAP.md   <- feuille de route par étapes
-├── README.md      <- ce fichier
-├── AGENTS.md      <- notes session/agent
-├── receipt        <- paquet SliTaz (wok), PACKAGE=tazterm
-├── data/          <- tazterm.desktop
-├── po/            <- traductions (E5)
-└── src/
-    ├── Makefile
-    ├── main.c
-    ├── tazterm-window.[ch]  <- fenêtre, raccourcis, menu
-    ├── tazterm-term.[ch]    <- wrapper VteTerminal : spawn, scrollback
-    ├── tazterm-split.[ch]   <- (E3) arbre GtkPaned
-    ├── tazterm-config.[ch]  <- (E2) ~/.config/tazterm/tazterm.conf
-    ├── tazterm-ai.[ch]      <- (E4) opencode/claude, capture, redaction
-    └── tazterm-ctl.[ch]     <- tazterm ctl : socket + client (lecture seule)
-```
+
+On SliTaz: `sudo spk-add gtk+3-dev vte291-dev pkg-config gettext-tools`, or use the package from the wok.
+
+TazTerm is developed and tested on SliTaz (GTK 3.22, VTE 0.56). It should build on any distribution that ships `vte-2.91` (Debian and Ubuntu: `libvte-2.91-dev libgtk-3-dev`, Arch: `vte3`); reports and fixes for other systems are welcome.
 
 ## License
 
-GPL-3.0-or-later.
+BSD, see [COPYING](COPYING).
+
+Engineer: Christophe Lincoln <pankso@slitaz.org>. Coding assistants: OpenCode & Claude.

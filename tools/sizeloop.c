@@ -1,3 +1,10 @@
+/*
+ * TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+ * Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+ *
+ * Engineer: Christophe Lincoln <pankso@slitaz.org>
+ * Coding assistants: OpenCode & Claude
+ */
 /* sizeloop: redraw getmaxyx-sized box every 2s, NEVER calls getch.
  * Proves whether ncurses size goes stale without input/resizeterm. */
 #include <ncurses.h>

@@ -1,3 +1,10 @@
+/*
+ * TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+ * Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+ *
+ * Engineer: Christophe Lincoln <pankso@slitaz.org>
+ * Coding assistants: OpenCode & Claude
+ */
 /* main.c — Options --working-directory / --shell / --version.
  * Shell precedence: --shell > TAZTERM_SHELL > config > /bin/sh.
  * Directory precedence: --working-directory > config > $HOME. */

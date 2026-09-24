@@ -1,3 +1,10 @@
+/*
+ * TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+ * Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+ *
+ * Engineer: Christophe Lincoln <pankso@slitaz.org>
+ * Coding assistants: OpenCode & Claude
+ */
 /* xlist2: EWMH client list with geometry + map state (recreation post-reboot).
  * Output: win=ID map=M x=X y=Y w=W h=H [FLAGS] NAME. Temp tool. */
 #include <X11/Xlib.h>

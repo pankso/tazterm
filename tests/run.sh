@@ -1,4 +1,11 @@
 #!/bin/sh
+#
+# TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+# Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+#
+# Engineer: Christophe Lincoln <pankso@slitaz.org>
+# Coding assistants: OpenCode & Claude
+#
 # run.sh — `make check`: unit tests, GUI scenarios on Xvfb, end to end.
 # Display: $TAZTERM_TEST_DISPLAY (default :7). An existing server there
 # is reused, else Xvfb is started and killed at the end. Config and

@@ -1,3 +1,10 @@
+/*
+ * TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+ * Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+ *
+ * Engineer: Christophe Lincoln <pankso@slitaz.org>
+ * Coding assistants: OpenCode & Claude
+ */
 /* gui.c — Real VTE on a (virtual) display, one scenario per run:
  *   gui MODE SHELL
  * Links the real src/ objects. Prints PASS/FAIL, exit status 0 = pass.

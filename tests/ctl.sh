@@ -1,4 +1,11 @@
 #!/bin/sh
+#
+# TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+# Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+#
+# Engineer: Christophe Lincoln <pankso@slitaz.org>
+# Coding assistants: OpenCode & Claude
+#
 # ctl.sh — End to end with the real binary: -e/-hold, tazterm ctl,
 # redaction, errors, socket cleanup. Needs $DISPLAY, $BIN, and a
 # private XDG_CONFIG_HOME / XDG_CACHE_HOME (set by run.sh).

@@ -1,3 +1,10 @@
+/*
+ * TazTerm - light GTK3/VTE terminal for SliTaz, made for AI agents
+ * Copyright (C) 2026 SliTaz GNU/Linux - BSD License, see COPYING
+ *
+ * Engineer: Christophe Lincoln <pankso@slitaz.org>
+ * Coding assistants: OpenCode & Claude
+ */
 /* tazkey: XTest key combo + text typing for GUI tests.
  * Usage:
  *   tazkey combo ctrl+shift f   (modifiers: ctrl shift alt, key = keysym name)
