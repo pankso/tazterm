@@ -755,8 +755,12 @@ tazterm_split_focus_dir(GtkWidget *split, TaztermDirection dir)
 	}
 	g_ptr_array_free(arr, TRUE);
 
-	if (best)
-		gtk_widget_grab_focus(best); /* focus-in met a jour active */
+	if (best) {
+		gtk_widget_grab_focus(best);
+		/* focus-in updates the active pane, but only when the window
+		 * has the input focus: do it here too (idempotent). */
+		on_term_focus_in(best, NULL, split);
+	}
 }
 
 /* --- pane zoom, resize, equalize ------------------------------------------ */
