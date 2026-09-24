@@ -77,10 +77,12 @@ tazterm ctl notify "fini"   # contour orange du panneau + fenêtre en urgence
 À mettre dans le `CLAUDE.md` / `AGENTS.md` d'un projet :
 
 ```
-Si TERM_PROGRAM=tazterm : `tazterm ctl read` montre la sortie récente du
-panneau de l'utilisateur (erreurs de build, tests). Le lire avant de
-demander de copier-coller. `tazterm ctl ls` liste les panneaux.
+If TERM_PROGRAM=tazterm, run `tazterm ctl guide` once: it explains how
+to read the user's panes instead of asking them to paste output.
 ```
+
+`tazterm ctl guide` affiche le mode d'emploi pour agents (markdown,
+anglais), intégré au binaire donc toujours à jour.
 
 ## Raccourcis de base
 
