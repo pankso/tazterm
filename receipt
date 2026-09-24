@@ -30,9 +30,12 @@ genpkg_rules()
 }
 
 # Unit tests (no display): redaction, paste sanitizer, command parsing.
+# Output shown on failure only: a redaction test input reads like a
+# make error and would trip cook's log check.
 testsuite()
 {
-	cd $src && make test
+	cd $src && make test > test.log 2>&1 || { cat test.log; return 1; }
+	echo "$(grep -c '^PASS' test.log) unit tests passed"
 }
 
 post_install()
