@@ -18,7 +18,7 @@
 
 G_BEGIN_DECLS
 
-#define TAZTERM_VERSION "0.6"
+#define TAZTERM_VERSION "0.7"
 
 /* TRUE when TAZTERM_DEBUG=1 (stderr logs, lxtaz pattern). */
 gboolean tazterm_debug(void);
