@@ -18,6 +18,7 @@ typedef struct {
 	char *ai_agent;    /* "auto" or opencode|claude|navette */
 	int ai_explain_lines;  /* default 200 */
 	int ai_capture_lines;  /* default 2000 */
+	gboolean ai_redact;    /* mask secrets sent to agents, default TRUE */
 } TaztermConfig;
 
 /* Load the config (file created with defaults when missing).

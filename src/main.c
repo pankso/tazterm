@@ -9,10 +9,9 @@
 #include <glib/gi18n.h>
 
 #include "tazterm-config.h"
+#include "tazterm-ctl.h"
 #include "tazterm-term.h"
 #include "tazterm-window.h"
-
-#define TAZTERM_VERSION "0.5"
 
 #ifndef GETTEXT_PACKAGE
 #define GETTEXT_PACKAGE "tazterm"
@@ -46,6 +45,9 @@ main(int argc, char *argv[])
 	/* Shell integration hook: emit OSC 7 and exit, no GTK. */
 	if (argc >= 2 && strcmp(argv[1], "--osc7") == 0)
 		return tazterm_term_osc7_emit() ? 0 : 1;
+	/* Agent/script client: talks to a running tazterm, no GTK. */
+	if (argc >= 2 && strcmp(argv[1], "ctl") == 0)
+		return tazterm_ctl_client(argc - 2, argv + 2);
 
 	/* SliTaz has no accessibility bus: cut the at-spi bridge to avoid
 	 * the "Couldn't connect to accessibility bus" warning. */

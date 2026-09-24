@@ -30,9 +30,16 @@ const char *tazterm_ai_launch_cmd(const char *agent);
  * blanks trimmed). n <= 0: everything. Free it (g_free). */
 char *tazterm_ai_last_lines(VteTerminal *term, int n);
 
+/* Mask obvious secrets (private keys, API tokens, password=...) with
+ * [REDACTED]. count (may be NULL) gets the number masked.
+ * Returns a new string (g_free). */
+char *tazterm_ai_redact(const char *text, guint *count);
+
 /* "Explain" prompt (markdown) around the last n lines of term, framed
- * as untrusted data for the agent. Free it (g_free). */
-char *tazterm_ai_explain_prompt(VteTerminal *term, int nlines);
+ * as untrusted data for the agent, secrets masked when redact.
+ * Free it (g_free). */
+char *tazterm_ai_explain_prompt(VteTerminal *term, int nlines,
+    gboolean redact);
 
 G_END_DECLS
 

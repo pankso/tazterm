@@ -58,7 +58,9 @@ static const char default_conf[] =
 "agent=auto\n"
 "# Lines sent by \"explain\" / copied by \"copy scrollback\"\n"
 "explain_lines=" G_STRINGIFY(TAZTERM_DEFAULT_EXPLAIN) "\n"
-"capture_lines=" G_STRINGIFY(TAZTERM_DEFAULT_CAPTURE) "\n";
+"capture_lines=" G_STRINGIFY(TAZTERM_DEFAULT_CAPTURE) "\n"
+"# Mask keys, tokens and passwords in text handed to agents\n"
+"redact=true\n";
 
 static void
 config_save_defaults(const char *path)
@@ -92,6 +94,7 @@ tazterm_config_load(void)
 	cfg->ai_agent = g_strdup("auto");
 	cfg->ai_explain_lines = TAZTERM_DEFAULT_EXPLAIN;
 	cfg->ai_capture_lines = TAZTERM_DEFAULT_CAPTURE;
+	cfg->ai_redact = TRUE;
 
 	path = tazterm_config_path();
 	kf = g_key_file_new();
@@ -172,6 +175,10 @@ tazterm_config_load(void)
 		cfg->ai_capture_lines = 10;
 	if (cfg->ai_capture_lines > 100000)
 		cfg->ai_capture_lines = 100000;
+
+	if (g_key_file_has_key(kf, "ai", "redact", NULL))
+		cfg->ai_redact = g_key_file_get_boolean(kf, "ai", "redact",
+		    NULL);
 
 	g_key_file_free(kf);
 	return cfg;

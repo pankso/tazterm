@@ -46,6 +46,16 @@ VteTerminal *tazterm_split_active_term(GtkWidget *split);
  * or NULL when there is none. */
 VteTerminal *tazterm_split_find_agent(GtkWidget *split);
 
+/* Every pane's terminal, tree order (free with g_ptr_array_free). */
+GPtrArray *tazterm_split_list(GtkWidget *split);
+
+/* Pane active before the current one, or NULL (closed / none). */
+VteTerminal *tazterm_split_previous_term(GtkWidget *split);
+
+/* Orange outline on a background pane that wants the user; cleared
+ * when the pane gets focus. No-op on the active pane. */
+void tazterm_split_attention(GtkWidget *split, VteTerminal *term);
+
 /* Pane count (debug / tests). */
 int tazterm_split_count(GtkWidget *split);
 

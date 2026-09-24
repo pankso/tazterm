@@ -371,6 +371,46 @@ env_integrate_shell(char ***envv, const char *shell)
 	}
 }
 
+static int next_pane_id = 1;
+static char *ctl_socket = NULL;
+
+void
+tazterm_term_set_ctl_socket(const char *path)
+{
+	g_free(ctl_socket);
+	ctl_socket = g_strdup(path);
+}
+
+int
+tazterm_term_get_id(VteTerminal *term)
+{
+	return GPOINTER_TO_INT(g_object_get_data(G_OBJECT(term),
+	    "tazterm-pane-id"));
+}
+
+/* Pane identity for programs inside it (agents calling tazterm ctl).
+ * Inherited values from a parent tazterm are always replaced. */
+static void
+env_set_pane(char ***envv, VteTerminal *term)
+{
+	char *id;
+
+	id = g_strdup_printf("%d", next_pane_id);
+	g_object_set_data(G_OBJECT(term), "tazterm-pane-id",
+	    GINT_TO_POINTER(next_pane_id));
+	next_pane_id++;
+	*envv = g_environ_setenv(*envv, "TAZTERM_PANE", id, TRUE);
+	g_free(id);
+	*envv = g_environ_setenv(*envv, "TERM_PROGRAM", "tazterm", TRUE);
+	*envv = g_environ_setenv(*envv, "TERM_PROGRAM_VERSION",
+	    TAZTERM_VERSION, TRUE);
+	if (ctl_socket)
+		*envv = g_environ_setenv(*envv, "TAZTERM_SOCKET", ctl_socket,
+		    TRUE);
+	else
+		*envv = g_environ_unsetenv(*envv, "TAZTERM_SOCKET");
+}
+
 VteTerminal *
 tazterm_term_new(TaztermConfig *cfg,
     const char *shell_override, const char *workdir_override)
@@ -453,6 +493,7 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 	 * started from the console leaks TERM=linux (8 colors, 256-color
 	 * TUIs fall back to plain yellow). Say what VTE really is. */
 	envv = g_environ_setenv(envv, "TERM", "xterm-256color", TRUE);
+	env_set_pane(&envv, term);
 	if (!command || !*command) {
 		env_integrate_shell(&envv, shell);
 		/* Shell pane: remembered for the paste safety check. */
@@ -778,6 +819,27 @@ tazterm_term_paste_clipboard(VteTerminal *term)
 	g_object_add_weak_pointer(G_OBJECT(term), (gpointer *) &req->term);
 	gtk_clipboard_request_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD),
 	    on_clipboard_text, req);
+}
+
+char *
+tazterm_term_get_process(VteTerminal *term)
+{
+	VtePty *pty;
+	pid_t fg;
+	char *path;
+	char *comm = NULL;
+
+	pty = vte_terminal_get_pty(term);
+	if (!pty)
+		return NULL;
+	fg = tcgetpgrp(vte_pty_get_fd(pty));
+	if (fg <= 0)
+		return NULL;
+	path = g_strdup_printf("/proc/%d/comm", (int) fg);
+	if (!g_file_get_contents(path, &comm, NULL, NULL))
+		comm = NULL;
+	g_free(path);
+	return comm ? g_strstrip(comm) : NULL;
 }
 
 /* Active shell's cwd. /proc first when readable (cannot be spoofed by

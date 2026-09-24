@@ -11,6 +11,8 @@
 
 G_BEGIN_DECLS
 
+#define TAZTERM_VERSION "0.5"
+
 /* TRUE when TAZTERM_DEBUG=1 (stderr logs, lxtaz pattern). */
 gboolean tazterm_debug(void);
 
@@ -54,6 +56,17 @@ gboolean tazterm_term_paste_text(VteTerminal *term, GdkAtom sel,
  * confirmation dialog before a multi-line paste into a shell without
  * bracketed paste (busybox ash), where each line would run. */
 void tazterm_term_paste_clipboard(VteTerminal *term);
+
+/* Pane id (1, 2, ... never reused), exported as TAZTERM_PANE. */
+int tazterm_term_get_id(VteTerminal *term);
+
+/* Name of the pane's foreground process (/proc comm), NULL if
+ * unknown. Caller frees (g_free). */
+char *tazterm_term_get_process(VteTerminal *term);
+
+/* Control socket exported as TAZTERM_SOCKET to panes spawned from now
+ * on (NULL: none, and an inherited one is removed). */
+void tazterm_term_set_ctl_socket(const char *path);
 
 /* Active shell's cwd (/proc then OSC 7). Caller frees, NULL if unknown. */
 char *tazterm_term_get_cwd(VteTerminal *term);

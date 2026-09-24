@@ -19,6 +19,7 @@
  */
 #include "tazterm-window.h"
 #include "tazterm-ai.h"
+#include "tazterm-ctl.h"
 #include "tazterm-split.h"
 #include "tazterm-term.h"
 
@@ -80,6 +81,13 @@ on_sigusr1(gpointer data)
 	g_free(text);
 	g_free(path);
 	return TRUE;
+}
+
+static gboolean
+on_quit_signal(gpointer data)
+{
+	gtk_widget_destroy(GTK_WIDGET(data));
+	return G_SOURCE_REMOVE;
 }
 
 /* --- title -------------------------------------------------------------- */
@@ -361,7 +369,8 @@ ai_explain(TaztermWin *tw)
 	term = tazterm_split_active_term(tw->split);
 	if (!term)
 		return;
-	prompt = tazterm_ai_explain_prompt(term, tw->cfg->ai_explain_lines);
+	prompt = tazterm_ai_explain_prompt(term, tw->cfg->ai_explain_lines,
+	    tw->cfg->ai_redact);
 	gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD),
 	    prompt, -1);
 	agent = tazterm_split_find_agent(tw->split);
@@ -885,6 +894,9 @@ tazterm_window_new(TaztermConfig *cfg,
 	gtk_window_set_title(GTK_WINDOW(tw->win), "TazTerm");
 	gtk_window_set_icon_name(GTK_WINDOW(tw->win), "tazterm");
 	gtk_window_set_default_size(GTK_WINDOW(tw->win), 900, 600);
+	/* Socket closed before the panes go: no request on a dying tree. */
+	g_signal_connect(tw->win, "destroy", G_CALLBACK(tazterm_ctl_stop),
+	    NULL);
 	g_signal_connect(tw->win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(tw->win, "window-state-event",
 	    G_CALLBACK(on_window_state), tw);
@@ -904,6 +916,9 @@ tazterm_window_new(TaztermConfig *cfg,
 	g_signal_connect(tw->search_entry, "key-press-event",
 	    G_CALLBACK(on_search_key), tw);
 
+	/* Before the first pane: its env gets TAZTERM_SOCKET. */
+	tazterm_ctl_start(cfg);
+
 	hooks.term_setup = term_setup;
 	hooks.term_setup_data = tw;
 	hooks.focus_changed = on_pane_focus;
@@ -913,6 +928,7 @@ tazterm_window_new(TaztermConfig *cfg,
 	tw->split = tazterm_split_new(cfg, shell_override, workdir_override,
 	    &hooks);
 	gtk_box_pack_start(GTK_BOX(box), tw->split, TRUE, TRUE, 0);
+	tazterm_ctl_set_split(tw->split);
 
 	/* State attached to the window, freed on destroy. */
 	g_object_set_data_full(G_OBJECT(tw->win), "tazterm-win", tw, win_free);
@@ -920,6 +936,10 @@ tazterm_window_new(TaztermConfig *cfg,
 	debug_win = tw;
 	if (tazterm_debug())
 		g_unix_signal_add(SIGUSR1, on_sigusr1, NULL);
+	/* Clean exit on kill / logout: the ctl socket gets unlinked. */
+	g_unix_signal_add(SIGTERM, on_quit_signal, tw->win);
+	g_unix_signal_add(SIGHUP, on_quit_signal, tw->win);
+	g_unix_signal_add(SIGINT, on_quit_signal, tw->win);
 
 	return tw->win;
 }

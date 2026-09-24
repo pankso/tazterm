@@ -48,6 +48,40 @@ force la commande — pratique pour tester). La capture lit le texte brut
 du pty : aucun changement requis côté agent, `navette` (one-shot comme
 TUI) marche tel quel.
 
+## tazterm ctl : l'agent lit les panneaux
+
+Chaque panneau exporte `TAZTERM_SOCKET`, `TAZTERM_PANE` (id du panneau)
+et `TERM_PROGRAM=tazterm`. Tout agent qui sait lancer une commande
+(claude, opencode, navette) peut lire ce que l'utilisateur voit, sans
+copier-coller :
+
+```sh
+tazterm ctl ls              # id, rôle (shell/agent/cmd), état, processus, cwd, titre
+tazterm ctl read            # 200 dernières lignes du panneau d'où vient l'utilisateur
+tazterm ctl read -p 1 -n 50 # panneau 1, 50 lignes (-a : tout le scrollback)
+tazterm ctl notify "fini"   # contour orange du panneau + fenêtre en urgence
+```
+
+- **Lecture seule** : un agent ne peut jamais taper dans un panneau.
+  La sortie terminal n'est pas fiable (curl, logs, README cloné) et un
+  agent qui la lit peut être manipulé : écrire reste un geste humain.
+- Secrets masqués (`[REDACTED]` : clés privées, jetons `sk-`/`ghp_`/`AKIA`…,
+  `password=`…) ; `[ai] redact=false` pour désactiver.
+- Socket `$XDG_RUNTIME_DIR/tazterm/PID.sock` (sinon `~/.cache/tazterm/`),
+  dossier 0700, uid du pair vérifié, supprimé à la fermeture.
+- Hors d'un panneau (agent lancé ailleurs) : `ctl` trouve le seul
+  tazterm lancé, ou demande `TAZTERM_SOCKET` s'il y en a plusieurs.
+
+À mettre dans le `CLAUDE.md` / `AGENTS.md` d'un projet :
+
+```
+Si TERM_PROGRAM=tazterm : `tazterm ctl read` montre la sortie récente du
+panneau de l'utilisateur (erreurs de build, tests). Le lire avant de
+demander de copier-coller. `tazterm ctl ls` liste les panneaux.
+```
+
+## Raccourcis de base
+
 - `Ctrl+Shift+C` / `Ctrl+Shift+V` : copier / coller
 - `Ctrl+Shift+Q` : quitter
 - `Ctrl+Shift+F` : afficher / masquer la recherche (Entrée = suivant, Shift+Entrée = précédent)
@@ -74,6 +108,7 @@ background=#1c1e22
 agent=auto
 explain_lines=200
 capture_lines=2000
+redact=true
 ```
 - Shell : `/bin/sh` (BusyBox ash) par défaut, `TAZTERM_SHELL=/bin/bash` pour forcer un autre
 
@@ -94,7 +129,8 @@ tazterm/
     ├── tazterm-term.[ch]    <- wrapper VteTerminal : spawn, scrollback
     ├── tazterm-split.[ch]   <- (E3) arbre GtkPaned
     ├── tazterm-config.[ch]  <- (E2) ~/.config/tazterm/tazterm.conf
-    └── tazterm-ai.[ch]      <- (E4) opencode/claude, capture output
+    ├── tazterm-ai.[ch]      <- (E4) opencode/claude, capture, redaction
+    └── tazterm-ctl.[ch]     <- tazterm ctl : socket + client (lecture seule)
 ```
 
 ## License

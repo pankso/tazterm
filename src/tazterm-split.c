@@ -14,6 +14,7 @@ typedef struct {
 	TaztermSplitHooks hooks;
 	GtkWidget *root;
 	VteTerminal *active;
+	VteTerminal *prev;  /* previously active pane, weak pointer */
 	gdouble font_scale; /* window-wide zoom, inherited by new panes */
 } Split;
 
@@ -24,6 +25,9 @@ split_free(gpointer data)
 {
 	Split *sp = data;
 
+	if (sp->prev)
+		g_object_remove_weak_pointer(G_OBJECT(sp->prev),
+		    (gpointer *) &sp->prev);
 	g_free(sp->shell_override);
 	g_free(sp->workdir_override);
 	g_free(sp);
@@ -45,7 +49,8 @@ css_ensure(void)
 	 * never resizes its VTE (no SIGWINCH storm for ncurses apps). */
 	gtk_css_provider_load_from_data(css,
 	    ".tazterm-pane { outline: 2px solid transparent; outline-offset: -2px; }"
-	    ".tazterm-pane-focused { outline-color: #4a90d9; }",
+	    ".tazterm-pane-focused { outline-color: #4a90d9; }"
+	    ".tazterm-pane-attention { outline-color: #f57900; }",
 	    -1, NULL);
 	gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),
 	    GTK_STYLE_PROVIDER(css),
@@ -65,6 +70,23 @@ leaf_set_focused(GtkWidget *leaf, gboolean focused)
 		gtk_style_context_remove_class(ctx, "tazterm-pane-focused");
 }
 
+/* Change the active pane, remembering the old one ("tazterm ctl read"
+ * from an agent pane targets the pane the user came from). */
+static void
+active_set(Split *sp, VteTerminal *term)
+{
+	if (sp->active == term)
+		return;
+	if (sp->prev)
+		g_object_remove_weak_pointer(G_OBJECT(sp->prev),
+		    (gpointer *) &sp->prev);
+	sp->prev = sp->active;
+	if (sp->prev)
+		g_object_add_weak_pointer(G_OBJECT(sp->prev),
+		    (gpointer *) &sp->prev);
+	sp->active = term;
+}
+
 /* --- leaves ------------------------------------------------------------ */
 
 static gboolean
@@ -80,8 +102,10 @@ on_term_focus_in(GtkWidget *term, GdkEventFocus *event, gpointer data)
 			leaf_set_focused(
 			    gtk_widget_get_parent(GTK_WIDGET(sp->active)),
 			    FALSE);
-		sp->active = VTE_TERMINAL(term);
+		active_set(sp, VTE_TERMINAL(term));
 		leaf_set_focused(gtk_widget_get_parent(term), TRUE);
+		gtk_style_context_remove_class(gtk_widget_get_style_context(
+		    gtk_widget_get_parent(term)), "tazterm-pane-attention");
 		if (tazterm_debug())
 			g_printerr("tazterm: focus pane %p\n",
 			    (void *) sp->active);
@@ -303,6 +327,36 @@ tazterm_split_find_agent(GtkWidget *split)
 	return found;
 }
 
+GPtrArray *
+tazterm_split_list(GtkWidget *split)
+{
+	GPtrArray *arr;
+
+	arr = g_ptr_array_new();
+	collect_terms(split, arr);
+	return arr;
+}
+
+VteTerminal *
+tazterm_split_previous_term(GtkWidget *split)
+{
+	return SPLIT(split)->prev;
+}
+
+void
+tazterm_split_attention(GtkWidget *split, VteTerminal *term)
+{
+	GtkWidget *leaf;
+
+	/* The user is looking at the active pane already. */
+	if (!term || term == SPLIT(split)->active)
+		return;
+	leaf = leaf_of(term);
+	if (leaf)
+		gtk_style_context_add_class(gtk_widget_get_style_context(leaf),
+		    "tazterm-pane-attention");
+}
+
 int
 tazterm_split_count(GtkWidget *split)
 {
@@ -379,7 +433,7 @@ split_current(GtkWidget *split, GtkOrientation orientation,
 	/* Balance at half once the allocation is known. */
 	g_idle_add(balance_idle, g_object_ref(paned));
 
-	sp->active = VTE_TERMINAL(gtk_bin_get_child(GTK_BIN(newleaf)));
+	active_set(sp, VTE_TERMINAL(gtk_bin_get_child(GTK_BIN(newleaf))));
 	leaf_set_focused(leaf, FALSE);
 	leaf_set_focused(newleaf, TRUE);
 	gtk_widget_grab_focus(GTK_WIDGET(sp->active));
@@ -498,7 +552,7 @@ tazterm_split_remove_term(GtkWidget *split, VteTerminal *term)
 
 	if (focus) {
 		if (sp->active == term)
-			sp->active = focus;
+			active_set(sp, focus);
 		leaf_set_focused(gtk_widget_get_parent(
 		    GTK_WIDGET(sp->active)), TRUE);
 		gtk_widget_grab_focus(GTK_WIDGET(sp->active));
