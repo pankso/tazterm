@@ -29,6 +29,7 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 typedef struct {
 	GtkWidget *win;
@@ -38,6 +39,7 @@ typedef struct {
 	GtkWidget *search_entry;
 	char **agents;      /* detected on PATH (g_strfreev) */
 	char *agent;        /* default (g_free, NULL if none) */
+	char *title;        /* base title (-T), default "TazTerm" */
 	gboolean fullscreen;
 } TaztermWin;
 
@@ -48,6 +50,7 @@ win_free(gpointer data)
 
 	g_strfreev(tw->agents);
 	g_free(tw->agent);
+	g_free(tw->title);
 	g_free(tw);
 }
 
@@ -105,12 +108,12 @@ title_update(TaztermWin *tw, VteTerminal *term)
 		 * UTF-8 valid, unlike a byte cut). */
 		char *short_title = g_utf8_substring(title, 0, 256);
 
-		full = g_strdup_printf("%s - TazTerm", short_title);
+		full = g_strdup_printf("%s - %s", short_title, tw->title);
 		g_free(short_title);
 		gtk_window_set_title(GTK_WINDOW(tw->win), full);
 		g_free(full);
 	} else {
-		gtk_window_set_title(GTK_WINDOW(tw->win), "TazTerm");
+		gtk_window_set_title(GTK_WINDOW(tw->win), tw->title);
 	}
 }
 
@@ -314,6 +317,7 @@ static void
 ai_agent_split(TaztermWin *tw, const char *agent)
 {
 	const char *cmd;
+	char **argv;
 
 	if (!agent)
 		agent = tw->agent;
@@ -323,7 +327,13 @@ ai_agent_split(TaztermWin *tw, const char *agent)
 		return;
 	}
 	cmd = tazterm_ai_launch_cmd(agent);
-	tazterm_split_vertical_cmd(tw->split, cmd);
+	argv = tazterm_command_argv(tw->cfg, cmd);
+	if (!argv) {
+		g_warning("tazterm: cannot parse agent command '%s'", cmd);
+		return;
+	}
+	tazterm_split_vertical_cmd(tw->split, argv);
+	g_strfreev(argv);
 	/* The new pane becomes active: tag it so "send to agent"
 	 * can find it later. */
 	{
@@ -855,15 +865,47 @@ on_win_focus_in(GtkWidget *widget, GdkEvent *event, gpointer data)
 	return FALSE;
 }
 
-/* A shell ended: remove its pane (close the window when last). */
+/* A shell ended: remove its pane (close the window when last).
+ * --hold pane: keep its output on screen, closed by the user. */
 static void
 on_child_exited(VteTerminal *term, int status, gpointer data)
 {
 	TaztermWin *tw = TW(data);
 
-	(void) status;
+	if (g_object_get_data(G_OBJECT(term), "tazterm-hold")) {
+		char *msg;
 
+		if (WIFEXITED(status))
+			msg = g_strdup_printf(_("\r\n[terminé, code %d — "
+			    "Ctrl+Shift+W pour fermer]\r\n"),
+			    WEXITSTATUS(status));
+		else
+			msg = g_strdup_printf(_("\r\n[terminé par le signal "
+			    "%d — Ctrl+Shift+W pour fermer]\r\n"),
+			    WTERMSIG(status));
+		vte_terminal_feed(term, msg, -1);
+		g_free(msg);
+		return;
+	}
 	tazterm_split_remove_term(tw->split, term);
+}
+
+/* xterm-style geometry: COLSxROWS[+X+Y], the terminal cell grid. */
+static void
+geometry_apply(TaztermWin *tw, VteTerminal *term, const char *geo)
+{
+	unsigned cols, rows;
+	int x, y, n;
+
+	n = sscanf(geo, "%ux%u%d%d", &cols, &rows, &x, &y);
+	if (n < 2 || cols < 2 || rows < 1 || cols > 1000 || rows > 1000) {
+		g_warning("tazterm: bad geometry '%s' (COLSxROWS[+X+Y])", geo);
+		return;
+	}
+	vte_terminal_set_size(term, cols, rows);
+	gtk_window_set_default_size(GTK_WINDOW(tw->win), -1, -1);
+	if (n == 4)
+		gtk_window_move(GTK_WINDOW(tw->win), x, y);
 }
 
 static void
@@ -894,15 +936,17 @@ term_setup(VteTerminal *term, gpointer data)
 /* --- build -------------------------------------------------------------- */
 
 GtkWidget *
-tazterm_window_new(TaztermConfig *cfg,
-    const char *shell_override, const char *workdir_override)
+tazterm_window_new(TaztermConfig *cfg, const TaztermWinOpts *opts)
 {
 	TaztermWin *tw;
 	GtkWidget *box;
 	TaztermSplitHooks hooks;
+	VteTerminal *first;
 
 	tw = g_new0(TaztermWin, 1);
 	tw->cfg = cfg;
+	tw->title = g_strdup(opts->title && *opts->title ? opts->title :
+	    "TazTerm");
 
 	/* AI agents detected once per window. */
 	tw->agents = tazterm_ai_detect(cfg->ai_agent, &tw->agent);
@@ -916,7 +960,7 @@ tazterm_window_new(TaztermConfig *cfg,
 	}
 
 	tw->win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_title(GTK_WINDOW(tw->win), "TazTerm");
+	gtk_window_set_title(GTK_WINDOW(tw->win), tw->title);
 	gtk_window_set_icon_name(GTK_WINDOW(tw->win), "tazterm");
 	gtk_window_set_default_size(GTK_WINDOW(tw->win), 900, 600);
 	/* Socket closed before the panes go: no request on a dying tree. */
@@ -952,9 +996,15 @@ tazterm_window_new(TaztermConfig *cfg,
 	hooks.focus_data = tw;
 	hooks.empty = on_split_empty;
 	hooks.empty_data = tw;
-	tw->split = tazterm_split_new(cfg, shell_override, workdir_override,
-	    &hooks);
+	tw->split = tazterm_split_new(cfg, opts->shell, opts->workdir,
+	    opts->command, &hooks);
 	gtk_box_pack_start(GTK_BOX(box), tw->split, TRUE, TRUE, 0);
+	first = tazterm_split_active_term(tw->split);
+	if (opts->hold && opts->command)
+		g_object_set_data(G_OBJECT(first), "tazterm-hold",
+		    GINT_TO_POINTER(TRUE));
+	if (opts->geometry)
+		geometry_apply(tw, first, opts->geometry);
 	tazterm_ctl_set_split(tw->split);
 
 	/* State attached to the window, freed on destroy. */

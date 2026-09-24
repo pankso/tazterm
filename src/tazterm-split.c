@@ -131,7 +131,7 @@ leaf_of(VteTerminal *term)
 }
 
 static GtkWidget *
-leaf_new(Split *sp, GtkWidget *split, const char *command,
+leaf_new(Split *sp, GtkWidget *split, char **command,
     const char *workdir)
 {
 	GtkWidget *leaf;
@@ -270,7 +270,7 @@ tazterm_split_zoom_reset(GtkWidget *split)
 GtkWidget *
 tazterm_split_new(TaztermConfig *cfg,
     const char *shell_override, const char *workdir_override,
-    const TaztermSplitHooks *hooks)
+    char **command, const TaztermSplitHooks *hooks)
 {
 	Split *sp;
 	GtkWidget *leaf;
@@ -289,7 +289,7 @@ tazterm_split_new(TaztermConfig *cfg,
 	g_object_set_data_full(G_OBJECT(sp->root), "tazterm-split", sp,
 	    split_free);
 
-	leaf = leaf_new(sp, sp->root, NULL, NULL);
+	leaf = leaf_new(sp, sp->root, command, NULL);
 	gtk_box_pack_start(GTK_BOX(sp->root), leaf, TRUE, TRUE, 0);
 
 	sp->active = VTE_TERMINAL(gtk_bin_get_child(GTK_BIN(leaf)));
@@ -376,7 +376,7 @@ tazterm_split_count(GtkWidget *split)
 
 static void
 split_current(GtkWidget *split, GtkOrientation orientation,
-    const char *command)
+    char **command)
 {
 	Split *sp = SPLIT(split);
 	GtkWidget *leaf;
@@ -466,7 +466,7 @@ tazterm_split_horizontal(GtkWidget *split)
 }
 
 void
-tazterm_split_vertical_cmd(GtkWidget *split, const char *command)
+tazterm_split_vertical_cmd(GtkWidget *split, char **command)
 {
 	split_current(split, GTK_ORIENTATION_HORIZONTAL, command);
 }

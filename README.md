@@ -91,7 +91,7 @@ demander de copier-coller. `tazterm ctl ls` liste les panneaux.
 - Clic droit : menu complet (copier, coller, tout sélectionner, recherche, zoom)
 - `exit` dans le shell : ferme la fenêtre
 - Shell : `/bin/sh` (BusyBox ash) par défaut, `TAZTERM_SHELL=/bin/bash` pour forcer un autre
-- Options : `tazterm -d DOSSIER` (dossier de démarrage), `-s SHELL`, `-v` (version)
+- Options : `-d DOSSIER`, `-s SHELL`, `-v`, et compatibles xterm (wrapper SliTaz `terminal`) : `-T TITRE`, `-geometry 80x24[+X+Y]`, `-hold`, `-e COMMANDE ARGS…` (tout ce qui suit `-e`, ou une seule chaîne `"htop -d 5"`), `--class`/`--name` (WM_CLASS)
 - Debug : `TAZTERM_DEBUG=1 tazterm` (logs spawn, zoom, recherche sur stderr)
 
 ## Config : `~/.config/tazterm/tazterm.conf` (créé avec les défauts)

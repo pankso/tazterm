@@ -8,8 +8,18 @@
 
 G_BEGIN_DECLS
 
+/* Command-line options (xterm-compatible where it matters). */
+typedef struct {
+	const char *shell;     /* -s */
+	const char *workdir;   /* -d */
+	char **command;        /* -e ARGV..., NULL: shell */
+	const char *title;     /* -T: base title, default "TazTerm" */
+	const char *geometry;  /* --geometry COLSxROWS[+X+Y] */
+	gboolean hold;         /* --hold: keep the -e pane after exit */
+} TaztermWinOpts;
+
 GtkWidget *tazterm_window_new(TaztermConfig *cfg,
-    const char *shell_override, const char *workdir_override);
+    const TaztermWinOpts *opts);
 
 G_END_DECLS
 

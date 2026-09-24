@@ -19,13 +19,18 @@ gboolean tazterm_debug(void);
 /* Create a configured VteTerminal and spawn the shell.
  * Shell precedence: shell_override > TAZTERM_SHELL > cfg->shell.
  * Directory precedence: workdir_override > cfg->workdir > $HOME.
- * With command != NULL: spawn command instead of a shell (agent pane).
- * No space -> direct argv; with space (tests) -> shell -c "command". */
+ * With command (argv) != NULL: spawn it instead of a shell (agent
+ * pane, -e). */
 VteTerminal *tazterm_term_new(TaztermConfig *cfg,
     const char *shell_override, const char *workdir_override);
 VteTerminal *tazterm_term_new_cmd(TaztermConfig *cfg,
     const char *shell_override, const char *workdir_override,
-    const char *command);
+    char **command);
+
+/* argv for a command line: parsed and spawned directly, or through
+ * "cfg->shell -c" when it uses shell syntax (; | & $ ...).
+ * NULL when empty/unparsable. Free with g_strfreev. */
+char **tazterm_command_argv(TaztermConfig *cfg, const char *command);
 
 /* Search: set the (plain text) pattern and jump to the next match.
  * Returns TRUE when found. */

@@ -419,16 +419,38 @@ tazterm_term_new(TaztermConfig *cfg,
 	    NULL);
 }
 
+char **
+tazterm_command_argv(TaztermConfig *cfg, const char *command)
+{
+	char **argv = NULL;
+
+	if (!command || !*command)
+		return NULL;
+	/* Shell syntax (tests, "make; notify"): through the configured
+	 * shell. Plain "claude --continue": parsed, spawned directly. */
+	if (strpbrk(command, ";|&<>$`(){}*?\n")) {
+		argv = g_new0(char *, 4);
+		argv[0] = g_strdup(cfg->shell);
+		argv[1] = g_strdup("-c");
+		argv[2] = g_strdup(command);
+		return argv;
+	}
+	if (!g_shell_parse_argv(command, NULL, &argv, NULL))
+		return NULL;
+	return argv;
+}
+
 VteTerminal *
 tazterm_term_new_cmd(TaztermConfig *cfg,
     const char *shell_override, const char *workdir_override,
-    const char *command)
+    char **command)
 {
 	VteTerminal *term;
 	PangoFontDescription *font;
 	const char *shell;
 	const char *workdir;
-	char *argv[4];
+	char *shell_argv[2];
+	char **argv;
 	char **envv;
 
 	term = VTE_TERMINAL(vte_terminal_new());
@@ -453,21 +475,14 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 		if (!shell || !*shell)
 			shell = cfg->shell;
 	}
-	if (command && *command && !strchr(command, ' ')) {
-		/* Agent: direct spawn, no race with the shell. */
-		argv[0] = (char *) command;
-		argv[1] = NULL;
-	} else if (command && *command) {
-		/* Compound command (tests): via shell -c. Always a real
-		 * shell (cfg), never the -s override (often a script that
-		 * ignores $1, e.g. e4mark.sh). */
-		argv[0] = (char *) cfg->shell;
-		argv[1] = "-c";
-		argv[2] = (char *) command;
-		argv[3] = NULL;
+	if (command && command[0]) {
+		/* Command pane (agent, -e): spawned directly, no race with
+		 * a shell reading typed-in keys. */
+		argv = command;
 	} else {
-		argv[0] = (char *) shell;
-		argv[1] = NULL;
+		shell_argv[0] = (char *) shell;
+		shell_argv[1] = NULL;
+		argv = shell_argv;
 	}
 	if (workdir_override && *workdir_override)
 		workdir = workdir_override;
@@ -494,7 +509,7 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 	 * TUIs fall back to plain yellow). Say what VTE really is. */
 	envv = g_environ_setenv(envv, "TERM", "xterm-256color", TRUE);
 	env_set_pane(&envv, term);
-	if (!command || !*command) {
+	if (argv == shell_argv) {
 		env_integrate_shell(&envv, shell);
 		/* Shell pane: remembered for the paste safety check. */
 		g_object_set_data_full(G_OBJECT(term), "tazterm-shell",

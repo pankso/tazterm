@@ -34,10 +34,11 @@ typedef struct {
 	gpointer empty_data;
 } TaztermSplitHooks;
 
-/* New container with a first terminal. */
+/* New container with a first terminal: a shell, or command (argv,
+ * NULL for a shell). */
 GtkWidget *tazterm_split_new(TaztermConfig *cfg,
     const char *shell_override, const char *workdir_override,
-    const TaztermSplitHooks *hooks);
+    char **command, const TaztermSplitHooks *hooks);
 
 /* Active pane's terminal (never NULL while a pane remains). */
 VteTerminal *tazterm_split_active_term(GtkWidget *split);
@@ -65,7 +66,7 @@ void tazterm_split_horizontal(GtkWidget *split);
 
 /* Like vertical, but the new pane spawns command (agent) instead
  * of a shell. */
-void tazterm_split_vertical_cmd(GtkWidget *split, const char *command);
+void tazterm_split_vertical_cmd(GtkWidget *split, char **command);
 
 /* Close the pane holding term (remove from tree, collapse parent).
  * Safe when term already left the tree. Triggers empty() when empty. */
