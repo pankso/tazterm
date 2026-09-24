@@ -449,6 +449,10 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 	/* Exported by integration v3: drop it or a nested tazterm skips
 	 * its own hook. */
 	envv = g_environ_unsetenv(envv, "TAZTERM_OSC7");
+	/* VTE 0.56 keeps the caller's TERM when envv is given: a session
+	 * started from the console leaks TERM=linux (8 colors, 256-color
+	 * TUIs fall back to plain yellow). Say what VTE really is. */
+	envv = g_environ_setenv(envv, "TERM", "xterm-256color", TRUE);
 	if (!command || !*command) {
 		env_integrate_shell(&envv, shell);
 		/* Shell pane: remembered for the paste safety check. */
