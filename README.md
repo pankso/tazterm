@@ -110,7 +110,7 @@ anglais), intégré au binaire donc toujours à jour.
 - `Ctrl+Plus` / `Ctrl+Moins` / `Ctrl+0` : zoom avant / arrière / taille normale
 - Clic droit : menu complet (copier, coller, tout sélectionner, recherche, zoom)
 - `exit` dans le shell : ferme la fenêtre
-- Shell : `/bin/sh` (BusyBox ash) par défaut, `TAZTERM_SHELL=/bin/bash` pour forcer un autre
+- Shell : `shell=auto` par défaut = bash s'il est installé (blocs de commande, `ctl read -l`/`wait`, codes retour), sinon `/bin/sh` (busybox ash) ; `-s SHELL` ou `TAZTERM_SHELL` pour forcer
 - Options : `-d DOSSIER`, `-s SHELL`, `-v`, et compatibles xterm (wrapper SliTaz `terminal`) : `-T TITRE`, `-geometry 80x24[+X+Y]`, `-hold`, `-e COMMANDE ARGS…` (tout ce qui suit `-e`, ou une seule chaîne `"htop -d 5"`), `--class`/`--name` (WM_CLASS)
 - Debug : `TAZTERM_DEBUG=1 tazterm` (logs spawn, zoom, recherche sur stderr)
 
@@ -119,7 +119,7 @@ anglais), intégré au binaire donc toujours à jour.
 ```ini
 [terminal]
 font=Monospace 12
-shell=/bin/sh
+shell=auto
 scrollback_lines=10000
 foreground=#e6e8ed
 background=#1c1e22
@@ -131,7 +131,7 @@ explain_lines=200
 capture_lines=2000
 redact=true
 ```
-- Shell : `/bin/sh` (BusyBox ash) par défaut, `TAZTERM_SHELL=/bin/bash` pour forcer un autre
+- Shell : `shell=auto` par défaut = bash s'il est installé (blocs de commande, `ctl read -l`/`wait`, codes retour), sinon `/bin/sh` (busybox ash) ; `-s SHELL` ou `TAZTERM_SHELL` pour forcer
 
 ## Layout
 

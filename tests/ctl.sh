@@ -59,6 +59,18 @@ check "long path: nothing truncated" \
 kill $pid
 sleep 1
 
+# Fresh config: shell=auto picks bash when installed.
+if command -v bash >/dev/null; then
+	"$BIN" >/dev/null 2>&1 &
+	pid=$!
+	sleep 2
+	check "shell=auto gives bash" 'ctl ls | grep -q "	bash	"'
+	check "default config says auto" \
+		'grep -q "^shell=auto" "$XDG_CONFIG_HOME/tazterm/tazterm.conf"'
+	kill $pid
+	sleep 1
+fi
+
 check "-v without display" 'DISPLAY= "$BIN" -v | grep -q "^tazterm "'
 
 exit $fails

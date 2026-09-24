@@ -8,7 +8,7 @@ G_BEGIN_DECLS
 
 typedef struct {
 	char *font_desc;   /* e.g. "Monospace 12" */
-	char *shell;       /* default: /bin/sh (BusyBox ash) */
+	char *shell;       /* resolved: "auto" -> bash if installed, else /bin/sh */
 	char *workdir;     /* NULL = $HOME */
 	char *editor;      /* Ctrl+click file:line, NULL = $VISUAL/$EDITOR */
 	long scrollback;   /* lines, default 10000 */

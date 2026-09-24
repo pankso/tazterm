@@ -1,6 +1,6 @@
 /* gui.c — Real VTE on a (virtual) display, one scenario per run:
  *   gui MODE SHELL
- * Links the real src/*.o. Prints PASS/FAIL, exit status 0 = pass.
+ * Links the real src/ objects. Prints PASS/FAIL, exit status 0 = pass.
  * Handles `--osc7` itself: panes call $TAZTERM_BIN, i.e. us. */
 #include <stdio.h>
 #include <string.h>

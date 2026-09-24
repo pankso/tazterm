@@ -490,6 +490,9 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 		if (!shell || !*shell)
 			shell = cfg->shell;
 	}
+	/* -s auto / TAZTERM_SHELL=auto: same choice as the config. */
+	if (!strcmp(shell, "auto"))
+		shell = cfg->shell;
 	if (command && command[0]) {
 		/* Command pane (agent, -e): spawned directly, no race with
 		 * a shell reading typed-in keys. */

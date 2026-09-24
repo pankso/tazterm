@@ -17,7 +17,7 @@
 #include "tazterm-term.h"
 
 #define TAZTERM_DEFAULT_FONT "Monospace 12"
-#define TAZTERM_DEFAULT_SHELL "/bin/sh"
+#define TAZTERM_DEFAULT_SHELL "auto"
 #define TAZTERM_DEFAULT_SCROLLBACK 10000
 #define TAZTERM_DEFAULT_EXPLAIN 200
 #define TAZTERM_DEFAULT_CAPTURE 2000
@@ -42,11 +42,27 @@ tazterm_config_path(void)
 	    "tazterm.conf", NULL);
 }
 
+/* "auto": bash when installed (it has a prompt hook, busybox ash has
+ * none: no command blocks there), else /bin/sh. Anything else is kept
+ * as given. Returns a new string. */
+static char *
+shell_resolve(const char *shell)
+{
+	char *bash;
+
+	if (strcmp(shell, "auto") != 0)
+		return g_strdup(shell);
+	bash = g_find_program_in_path("bash");
+	return bash ? bash : g_strdup("/bin/sh");
+}
+
 /* Every key, so the user can discover them; optional ones commented. */
 static const char default_conf[] =
 "# TazTerm configuration (created with defaults).\n"
 "[terminal]\n"
 "font=" TAZTERM_DEFAULT_FONT "\n"
+"# auto: bash when installed (command blocks, ctl read -l / wait,\n"
+"# exit codes in the status bar), else /bin/sh (busybox ash)\n"
 "shell=" TAZTERM_DEFAULT_SHELL "\n"
 "scrollback_lines=" G_STRINGIFY(TAZTERM_DEFAULT_SCROLLBACK) "\n"
 "#foreground=#e6e8ed\n"
@@ -93,7 +109,7 @@ tazterm_config_load(void)
 
 	cfg = g_new0(TaztermConfig, 1);
 	cfg->font_desc = g_strdup(TAZTERM_DEFAULT_FONT);
-	cfg->shell = g_strdup(TAZTERM_DEFAULT_SHELL);
+	cfg->shell = shell_resolve(TAZTERM_DEFAULT_SHELL);
 	cfg->scrollback = TAZTERM_DEFAULT_SCROLLBACK;
 	cfg->workdir = NULL;
 	cfg->fg_set = FALSE;
@@ -128,7 +144,8 @@ tazterm_config_load(void)
 	s = g_key_file_get_string(kf, "terminal", "shell", NULL);
 	if (s && *s && !overlong(s, TAZTERM_MAX_PATH)) {
 		g_free(cfg->shell);
-		cfg->shell = s;
+		cfg->shell = shell_resolve(s);
+		g_free(s);
 	} else {
 		g_free(s);
 	}
