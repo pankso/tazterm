@@ -160,14 +160,18 @@ theme_apply(TaztermConfig *cfg, const char *name)
 static void
 config_save_defaults(const char *path)
 {
-	char *dir;
+	char *dir, *keys, *conf;
 
 	dir = g_path_get_dirname(path);
 	g_mkdir_with_parents(dir, 0755);
 	g_free(dir);
 	/* Fresh file in the user's own config dir; NOFOLLOW so a
 	 * planted symlink cannot redirect the write elsewhere. */
-	tazterm_write_file_nofollow(path, default_conf, -1, 0644);
+	keys = tazterm_keys_default_conf();
+	conf = g_strconcat(default_conf, keys, NULL);
+	tazterm_write_file_nofollow(path, conf, -1, 0644);
+	g_free(conf);
+	g_free(keys);
 }
 
 TaztermConfig *
@@ -203,6 +207,7 @@ tazterm_config_load(void)
 		g_clear_error(&err);
 		config_save_defaults(path);
 		theme_apply(cfg, "slitaz"); /* as in the file just written */
+		cfg->keys = tazterm_keys_new(NULL);
 		g_free(path);
 		g_key_file_free(kf);
 		return cfg;
@@ -322,6 +327,8 @@ tazterm_config_load(void)
 		cfg->ai_redact = g_key_file_get_boolean(kf, "ai", "redact",
 		    NULL);
 
+	cfg->keys = tazterm_keys_new(kf);
+
 	g_key_file_free(kf);
 	return cfg;
 }
@@ -336,5 +343,6 @@ tazterm_config_free(TaztermConfig *cfg)
 	g_free(cfg->workdir);
 	g_free(cfg->editor);
 	g_free(cfg->ai_agent);
+	tazterm_keys_free(cfg->keys);
 	g_free(cfg);
 }

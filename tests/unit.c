@@ -13,6 +13,7 @@
 
 #include "tazterm-ai.h"
 #include "tazterm-config.h"
+#include "tazterm-keys.h"
 #include "tazterm-term.h"
 
 static int fails;
@@ -115,6 +116,34 @@ main(void)
 		g_free(conf);
 		g_free(sub);
 		g_free(dir);
+	}
+
+	/* Shortcuts: defaults, case of letters, rebinding, disabling. */
+	{
+		GKeyFile *kf = g_key_file_new();
+		TaztermKeys *k = tazterm_keys_new(NULL);
+
+		check(tazterm_keys_lookup(k, GDK_KEY_E, GDK_CONTROL_MASK |
+		    GDK_SHIFT_MASK | GDK_MOD2_MASK) == TAZTERM_KEY_SPLIT_SIDE,
+		    "keys default, NumLock ignored");
+		check(tazterm_keys_lookup(k, GDK_KEY_e, GDK_CONTROL_MASK) == -1,
+		    "keys modifiers exact");
+		check(tazterm_keys_lookup(k, GDK_KEY_plus, GDK_CONTROL_MASK |
+		    GDK_SHIFT_MASK) == TAZTERM_KEY_FONT_BIGGER, "keys Ctrl++");
+		tazterm_keys_free(k);
+		g_key_file_load_from_data(kf, "[keys]\nfocus_left=\n"
+		    "split_side=Super+Return ctrl+alt+s\n", -1, 0, NULL);
+		k = tazterm_keys_new(kf);
+		check(tazterm_keys_lookup(k, GDK_KEY_Left, GDK_MOD1_MASK) == -1,
+		    "keys disabled");
+		check(tazterm_keys_lookup(k, GDK_KEY_Return, GDK_MOD4_MASK) ==
+		    TAZTERM_KEY_SPLIT_SIDE && tazterm_keys_lookup(k, GDK_KEY_s,
+		    GDK_CONTROL_MASK | GDK_MOD1_MASK) == TAZTERM_KEY_SPLIT_SIDE,
+		    "keys rebound");
+		check(tazterm_keys_lookup(k, GDK_KEY_E, GDK_CONTROL_MASK |
+		    GDK_SHIFT_MASK) == -1, "keys old binding gone");
+		tazterm_keys_free(k);
+		g_key_file_free(kf);
 	}
 
 	/* JSON strings: quotes, backslash, controls escaped, UTF-8 kept. */

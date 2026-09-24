@@ -7,7 +7,7 @@
  */
 /* tazterm-window.c — GtkWindow 900x600 + TaztermSplit + search.
  *
- * Shortcuts:
+ * Shortcuts (defaults, configurable in [keys], see tazterm-keys.c):
  *   Ctrl+Shift+C / V / Q : copy / paste / quit all
  *   Ctrl+Shift+F          : show/hide search (toggle; Enter = next,
  *                           Shift+Enter = previous, Esc closes, also
@@ -998,13 +998,13 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 {
 	TaztermWin *tw = TW(data);
 	VteTerminal *term;
-	gboolean ctrl, shift, alt;
+	gboolean ctrl, alt;
+	int action;
 
 	(void) widget;
 
 	term = tazterm_split_active_term(tw->split);
 	ctrl = (event->state & GDK_CONTROL_MASK) != 0;
-	shift = (event->state & GDK_SHIFT_MASK) != 0;
 	alt = (event->state & GDK_MOD1_MASK) != 0;
 
 	/* Esc in the terminal while search is open: close it instead of
@@ -1020,153 +1020,99 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 	    event->keyval == GDK_KEY_KP_Enter) && term && agent_restart(term))
 		return TRUE;
 
-	/* F11: fullscreen (no modifier, like usual terminals). */
-	if (!ctrl && !alt && !shift && event->keyval == GDK_KEY_F11) {
+	/* Everything else: the [keys] table (tazterm-keys.c). */
+	action = tazterm_keys_lookup(tw->cfg->keys, event->keyval,
+	    event->state);
+	switch (action) {
+	case TAZTERM_KEY_COPY:
+		if (term)
+			vte_terminal_copy_clipboard_format(term,
+			    VTE_FORMAT_TEXT);
+		return TRUE;
+	case TAZTERM_KEY_PASTE:
+		if (term)
+			tazterm_term_paste_clipboard(term);
+		return TRUE;
+	case TAZTERM_KEY_QUIT:
+		close_confirm(tw, NULL);
+		return TRUE;
+	case TAZTERM_KEY_FIND:
+		search_show(tw);
+		return TRUE;
+	case TAZTERM_KEY_SPLIT_SIDE:
+		tazterm_split_vertical(tw->split);
+		return TRUE;
+	case TAZTERM_KEY_SPLIT_STACKED:
+		tazterm_split_horizontal(tw->split);
+		return TRUE;
+	case TAZTERM_KEY_CLOSE:
+		close_confirm(tw, term);
+		return TRUE;
+	case TAZTERM_KEY_ZOOM_PANE:
+		tazterm_split_zoom_pane(tw->split);
+		if (term)
+			status_update(term);
+		return TRUE;
+	case TAZTERM_KEY_EQUALIZE:
+		tazterm_split_equalize(tw->split);
+		return TRUE;
+	case TAZTERM_KEY_FOCUS_LEFT:
+		tazterm_split_focus_dir(tw->split, TAZTERM_LEFT);
+		return TRUE;
+	case TAZTERM_KEY_FOCUS_RIGHT:
+		tazterm_split_focus_dir(tw->split, TAZTERM_RIGHT);
+		return TRUE;
+	case TAZTERM_KEY_FOCUS_UP:
+		tazterm_split_focus_dir(tw->split, TAZTERM_UP);
+		return TRUE;
+	case TAZTERM_KEY_FOCUS_DOWN:
+		tazterm_split_focus_dir(tw->split, TAZTERM_DOWN);
+		return TRUE;
+	case TAZTERM_KEY_RESIZE_LEFT:
+		tazterm_split_resize(tw->split, TAZTERM_LEFT);
+		return TRUE;
+	case TAZTERM_KEY_RESIZE_RIGHT:
+		tazterm_split_resize(tw->split, TAZTERM_RIGHT);
+		return TRUE;
+	case TAZTERM_KEY_RESIZE_UP:
+		tazterm_split_resize(tw->split, TAZTERM_UP);
+		return TRUE;
+	case TAZTERM_KEY_RESIZE_DOWN:
+		tazterm_split_resize(tw->split, TAZTERM_DOWN);
+		return TRUE;
+	case TAZTERM_KEY_PROMPT_PREV:
+	case TAZTERM_KEY_PROMPT_NEXT:
+		if (term)
+			prompt_jump(term,
+			    action == TAZTERM_KEY_PROMPT_PREV ? -1 : 1);
+		return TRUE;
+	case TAZTERM_KEY_AGENT:
+		ai_agent_split(tw, NULL);
+		return TRUE;
+	case TAZTERM_KEY_SEND:
+		ai_send_to_agent(tw, term);
+		return TRUE;
+	case TAZTERM_KEY_EXPLAIN:
+		ai_explain(tw, NULL);
+		return TRUE;
+	case TAZTERM_KEY_SCROLLBACK:
+		ai_copy_scrollback(tw);
+		return TRUE;
+	case TAZTERM_KEY_FONT_BIGGER:
+		tazterm_split_zoom_in(tw->split);
+		return TRUE;
+	case TAZTERM_KEY_FONT_SMALLER:
+		tazterm_split_zoom_out(tw->split);
+		return TRUE;
+	case TAZTERM_KEY_FONT_RESET:
+		tazterm_split_zoom_reset(tw->split);
+		return TRUE;
+	case TAZTERM_KEY_FULLSCREEN:
 		fullscreen_set(tw, !tw->fullscreen);
 		return TRUE;
-	}
-
-	/* Pane borders: Alt+Shift+Arrows. */
-	if (alt && shift && !ctrl) {
-		switch (event->keyval) {
-		case GDK_KEY_Left:
-		case GDK_KEY_KP_Left:
-			tazterm_split_resize(tw->split, TAZTERM_LEFT);
-			return TRUE;
-		case GDK_KEY_Right:
-		case GDK_KEY_KP_Right:
-			tazterm_split_resize(tw->split, TAZTERM_RIGHT);
-			return TRUE;
-		case GDK_KEY_Up:
-		case GDK_KEY_KP_Up:
-			tazterm_split_resize(tw->split, TAZTERM_UP);
-			return TRUE;
-		case GDK_KEY_Down:
-		case GDK_KEY_KP_Down:
-			tazterm_split_resize(tw->split, TAZTERM_DOWN);
-			return TRUE;
-		default:
-			break;
-		}
+	default:
 		return FALSE;
 	}
-
-	/* Pane navigation. */
-	if (alt && !ctrl) {
-		switch (event->keyval) {
-		case GDK_KEY_Left:
-		case GDK_KEY_KP_Left:
-			tazterm_split_focus_dir(tw->split, TAZTERM_LEFT);
-			return TRUE;
-		case GDK_KEY_Right:
-		case GDK_KEY_KP_Right:
-			tazterm_split_focus_dir(tw->split, TAZTERM_RIGHT);
-			return TRUE;
-		case GDK_KEY_Up:
-		case GDK_KEY_KP_Up:
-			tazterm_split_focus_dir(tw->split, TAZTERM_UP);
-			return TRUE;
-		case GDK_KEY_Down:
-		case GDK_KEY_KP_Down:
-			tazterm_split_focus_dir(tw->split, TAZTERM_DOWN);
-			return TRUE;
-		default:
-			break;
-		}
-		return FALSE;
-	}
-
-	if (ctrl && shift) {
-		switch (event->keyval) {
-		case GDK_KEY_C:
-		case GDK_KEY_c:
-			if (term)
-				vte_terminal_copy_clipboard_format(term,
-				    VTE_FORMAT_TEXT);
-			return TRUE;
-		case GDK_KEY_V:
-		case GDK_KEY_v:
-			if (term)
-				tazterm_term_paste_clipboard(term);
-			return TRUE;
-		case GDK_KEY_Q:
-		case GDK_KEY_q:
-			close_confirm(tw, NULL);
-			return TRUE;
-		case GDK_KEY_F:
-		case GDK_KEY_f:
-			search_show(tw);
-			return TRUE;
-		case GDK_KEY_E:
-		case GDK_KEY_e:
-			tazterm_split_vertical(tw->split);
-			return TRUE;
-		case GDK_KEY_O:
-		case GDK_KEY_o:
-			tazterm_split_horizontal(tw->split);
-			return TRUE;
-		case GDK_KEY_W:
-		case GDK_KEY_w:
-			close_confirm(tw, term);
-			return TRUE;
-		case GDK_KEY_A:
-		case GDK_KEY_a:
-			ai_agent_split(tw, NULL);
-			return TRUE;
-		case GDK_KEY_T:
-		case GDK_KEY_t:
-			ai_send_to_agent(tw, term);
-			return TRUE;
-		case GDK_KEY_S:
-		case GDK_KEY_s:
-			ai_copy_scrollback(tw);
-			return TRUE;
-		case GDK_KEY_X:
-		case GDK_KEY_x:
-			ai_explain(tw, NULL);
-			return TRUE;
-		case GDK_KEY_Z:
-		case GDK_KEY_z:
-			tazterm_split_zoom_pane(tw->split);
-			if (term)
-				status_update(term);
-			return TRUE;
-		case GDK_KEY_B:
-		case GDK_KEY_b:
-			tazterm_split_equalize(tw->split);
-			return TRUE;
-		case GDK_KEY_Up:
-		case GDK_KEY_Down:
-			if (term)
-				prompt_jump(term,
-				    event->keyval == GDK_KEY_Up ? -1 : 1);
-			return TRUE;
-		default:
-			break;
-		}
-	}
-	if (ctrl && !alt) {
-		if (!term)
-			return FALSE;
-		switch (event->keyval) {
-		case GDK_KEY_plus:
-		case GDK_KEY_KP_Add:
-		case GDK_KEY_equal: /* '+' without Shift on some layouts */
-			tazterm_split_zoom_in(tw->split);
-			return TRUE;
-		case GDK_KEY_minus:
-		case GDK_KEY_KP_Subtract:
-			tazterm_split_zoom_out(tw->split);
-			return TRUE;
-		case GDK_KEY_0:
-		case GDK_KEY_KP_0:
-			tazterm_split_zoom_reset(tw->split);
-			return TRUE;
-		default:
-			break;
-		}
-	}
-	return FALSE;
 }
 
 /* --- split hooks ---------------------------------------------------------- */

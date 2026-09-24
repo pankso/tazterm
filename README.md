@@ -79,7 +79,9 @@ If TERM_PROGRAM=tazterm, run `tazterm ctl guide` once: it explains how to read t
 | Ctrl+Shift+X | Send the last command (or last lines) to the agent |
 | Ctrl+Shift+S | Copy the scrollback |
 | Ctrl+click | Open a URL or `file:line` |
-| Ctrl+Plus / Minus / 0, F11 | Zoom, fullscreen |
+| Ctrl+Plus / Minus / 0, F11 | Font size, fullscreen |
+
+Every shortcut can be changed or disabled in the `[keys]` section of the configuration.
 
 ## Configuration
 
@@ -107,6 +109,13 @@ agent=auto
 explain_lines=200
 capture_lines=2000
 redact=true
+
+[keys]
+# Every shortcut, several per action, empty to give the key back to
+# the application (focus_left= frees Alt+Left for your editor)
+#split_side=Ctrl+Shift+E
+#focus_left=Alt+Left Alt+KP_Left
+#zoom_pane=Ctrl+Shift+Z
 ```
 
 Command blocks need bash: busybox ash has no prompt hook. With `shell=auto`, tazterm starts bash with its own `--rcfile`, which sources your `~/.bashrc` first.

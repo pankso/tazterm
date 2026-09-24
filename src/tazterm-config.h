@@ -11,6 +11,8 @@
 
 #include <gtk/gtk.h>
 
+#include "tazterm-keys.h"
+
 G_BEGIN_DECLS
 
 typedef struct {
@@ -37,6 +39,7 @@ typedef struct {
 	int ai_explain_lines;  /* default 200 */
 	int ai_capture_lines;  /* default 2000 */
 	gboolean ai_redact;    /* mask secrets sent to agents, default TRUE */
+	TaztermKeys *keys;     /* shortcuts, [keys] */
 } TaztermConfig;
 
 /* Load the config (file created with defaults when missing).
