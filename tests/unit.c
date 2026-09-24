@@ -78,5 +78,21 @@ main(void)
 	    "argv shell syntax");
 	g_strfreev(argv);
 
+	/* JSON strings: quotes, backslash, controls escaped, UTF-8 kept. */
+	{
+		GString *js = g_string_new(NULL);
+
+		tazterm_json_string(js, "a\"b\\c\nd\t\033é");
+		check(!strcmp(js->str, "\"a\\\"b\\\\c\\nd\\t\\u001bé\""),
+		    "json escape");
+		g_string_truncate(js, 0);
+		tazterm_json_string(js, NULL);
+		check(!strcmp(js->str, "null"), "json null");
+		g_string_truncate(js, 0);
+		tazterm_json_string(js, "x\377y");
+		check(g_utf8_validate(js->str, -1, NULL), "json invalid utf-8");
+		g_string_free(js, TRUE);
+	}
+
 	return fails;
 }

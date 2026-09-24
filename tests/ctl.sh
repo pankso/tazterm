@@ -39,9 +39,53 @@ check "guide without socket" \
 check "discovery finds the only window" \
 	'env -u TAZTERM_SOCKET "$BIN" ctl ls | grep -q "^1	"'
 
+
+# JSON answers: valid, redaction counted (jq when installed).
+if command -v jq >/dev/null; then
+	check "ls --json" '[ "$(ctl ls -j | jq -r ".[0].role")" = cmd ]'
+	check "read --json" \
+		'[ "$(ctl read -j -n 1 | jq -r ".redacted")" = 1 ]'
+fi
+check "read --json masks" 'ctl read -j -n 1 | grep -q "\[REDACTED\]"'
+
+# wait --idle: the pane is quiet (sleep 30).
+check "wait --idle returns when quiet" \
+	'ctl wait --idle -s 1 -t 5 | grep -q "^idle [0-9]*s"'
+
+# events: notify reaches a listener, text and JSON.
+ctl events >"$XDG_CACHE_HOME/ev" 2>&1 &
+evpid=$!
+ctl events -j >"$XDG_CACHE_HOME/evj" 2>&1 &
+evjpid=$!
+sleep 1
+ctl notify "build done"
+sleep 1
+kill $evpid $evjpid
+check "events: notify" 'grep -q "^notify 0 build done$" "$XDG_CACHE_HOME/ev"'
+check "events --json: notify" \
+	'grep -q "^{\"event\":\"notify\",\"pane\":0,\"text\":\"build done\"}$" "$XDG_CACHE_HOME/evj"'
+
 kill $pid
 sleep 1
 check "socket removed on SIGTERM" '[ ! -e "$(sock $pid)" ]'
+
+# wait --idle returns on a bell, events see it and the exit.
+"$BIN" -hold -e sh -c 'sleep 2; printf "\a"; sleep 1; exit 4' \
+	>/dev/null 2>&1 &
+pid=$!
+sleep 1
+ctl events >"$XDG_CACHE_HOME/ev" 2>&1 &
+evpid=$!
+check "wait --idle returns on bell" \
+	'ctl wait --idle -s 20 -t 10 | grep -q "^bell$"'
+check "wait --idle on a held pane: exited" \
+	'sleep 2; ctl wait --idle -t 5 | grep -q "^exited 4$"'
+kill $evpid
+check "events: bell and exit" \
+	'grep -q "^bell 1$" "$XDG_CACHE_HOME/ev" &&
+	 grep -q "^exit 1 4$" "$XDG_CACHE_HOME/ev"'
+kill $pid
+sleep 1
 
 # --hold keeps the pane and reports the exit code.
 "$BIN" -hold -e sh -c 'echo held; exit 3' >/dev/null 2>&1 &

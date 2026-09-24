@@ -19,7 +19,7 @@ Coding agents run in a terminal, and the first thing they ask is "paste me the e
 - Split panes in one window (side by side, stacked, keyboard navigation), window-wide zoom, fullscreen, search
 - Per-pane status line: id, role (shell, agent, command), foreground process, directory, activity
 - Command blocks for bash: every command with its output, exit code and duration; jump from prompt to prompt
-- `tazterm ctl`: `ls`, `read`, `read -l`, `blocks`, `wait`, `notify`, `guide`
+- `tazterm ctl`: `ls`, `read`, `read -l`, `blocks`, `wait`, `wait --idle`, `events`, `notify`, `guide`, with JSON output (`-j`)
 - Agent panes: detects claude, opencode and navette, opens one in a split, sends a selection or the last failed command to it (never submitted: you add your question)
 - Safe paste: control characters stripped, bracketed paste handled by VTE, confirmation before a multi-line paste into a shell that would run every line
 - Ctrl+click on URLs and on `file:line[:col]` (compilers, `grep -n`, tracebacks) to open your terminal editor at that line
@@ -37,11 +37,13 @@ tazterm ctl read            # last 200 lines of the pane you came from
 tazterm ctl read -l         # its last command: command, output, [exit N, 3s]
 tazterm ctl blocks          # recent commands with exit codes and durations
 tazterm ctl wait            # wait for the next command there to end, exit with its status
+tazterm ctl wait --idle -p 3  # wait for pane 3 to go quiet, ring or exit
+tazterm ctl events          # live stream: block, bell, notify, open, exit, close
 tazterm ctl notify "done"   # outline the agent's pane, set the urgency hint
 tazterm ctl guide           # how an agent should use all this (markdown)
 ```
 
-`wait` lets an agent say "run `make` in your pane" and get the result without running anything itself.
+`wait` lets an agent say "run `make` in your pane" and get the result without running anything itself. `wait --idle` and `events` let an agent follow other agents working in the next panes: an orchestrator knows when a turn ends without polling. Add `-j` to `ls`, `read`, `blocks`, `wait` or `events` for JSON, secrets already masked.
 
 To teach your agent, add one line to your `CLAUDE.md` or `AGENTS.md`:
 

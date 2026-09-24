@@ -1309,7 +1309,14 @@ static void
 on_bell(VteTerminal *term, gpointer data)
 {
 	TaztermWin *tw = TW(data);
+	int bells;
 
+	/* Count for ctl wait --idle, which returns on a new bell. */
+	bells = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(term),
+	    "tazterm-bells"));
+	g_object_set_data(G_OBJECT(term), "tazterm-bells",
+	    GINT_TO_POINTER(bells + 1));
+	tazterm_ctl_event(term, "bell", -1);
 	tazterm_split_attention(tw->split, term);
 	if (term != tazterm_split_active_term(tw->split)) {
 		g_object_set_data(G_OBJECT(term), "tazterm-bell",
@@ -1365,6 +1372,8 @@ on_child_exited(VteTerminal *term, int status, gpointer data)
 {
 	TaztermWin *tw = TW(data);
 
+	tazterm_ctl_event(term, "exit", WIFEXITED(status) ?
+	    WEXITSTATUS(status) : 128 + WTERMSIG(status));
 	if (g_object_get_data(G_OBJECT(term), "tazterm-hold")) {
 		char *msg, *note;
 
@@ -1412,6 +1421,13 @@ on_split_empty(gpointer data)
 	gtk_widget_destroy(tw->win);
 }
 
+static void
+on_term_destroy(GtkWidget *widget, gpointer data)
+{
+	(void) data;
+	tazterm_ctl_event(VTE_TERMINAL(widget), "close", -1);
+}
+
 /* Hook up signals for every terminal created by the split. */
 static void
 term_setup(VteTerminal *term, gpointer data)
@@ -1429,6 +1445,8 @@ term_setup(VteTerminal *term, gpointer data)
 	g_signal_connect(term, "bell", G_CALLBACK(on_bell), tw);
 	g_signal_connect(term, "contents-changed",
 	    G_CALLBACK(on_contents_changed), NULL);
+	g_signal_connect(term, "destroy", G_CALLBACK(on_term_destroy), NULL);
+	tazterm_ctl_event(term, "open", -1);
 }
 
 /* --- build -------------------------------------------------------------- */

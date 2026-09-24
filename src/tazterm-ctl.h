@@ -15,6 +15,7 @@
 #define TAZTERM_CTL_H
 
 #include <gtk/gtk.h>
+#include <vte/vte.h>
 
 #include "tazterm-config.h"
 
@@ -26,6 +27,10 @@ gboolean tazterm_ctl_start(TaztermConfig *cfg);
 
 /* Pane container the requests act on (set once the split exists). */
 void tazterm_ctl_set_split(GtkWidget *split);
+
+/* Pane event for `tazterm ctl events` listeners ("open", "bell",
+ * "exit", "close"); exit < 0: none. Nothing done when nobody listens. */
+void tazterm_ctl_event(VteTerminal *term, const char *event, int exit);
 
 /* Close and unlink the socket. */
 void tazterm_ctl_stop(void);

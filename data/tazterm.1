@@ -6,7 +6,7 @@ tazterm \- light GTK3/VTE terminal with split panes, AI friendly
 [\fIOPTION\fR...] [\fB\-e\fR \fICOMMAND\fR [\fIARGS\fR...]]
 .br
 .B tazterm ctl
-\fBls\fR | \fBread\fR | \fBblocks\fR | \fBwait\fR | \fBnotify\fR | \fBguide\fR [\fIOPTIONS\fR]
+\fBls\fR | \fBread\fR | \fBblocks\fR | \fBwait\fR | \fBevents\fR | \fBnotify\fR | \fBguide\fR [\fIOPTIONS\fR]
 .SH DESCRIPTION
 TazTerm is the SliTaz terminal: split panes in one window, a status
 line per pane, command blocks for bash, safe paste, and a read-only
@@ -105,11 +105,24 @@ Recent commands with exit code and duration.
 Wait for the next command of a pane to end, print it, exit with its
 status.
 .TP
+.BR wait " \-\-idle [" \-p " " \fIID\fR "] [" \-s " " \fISECS\fR "] [" \-t " " \fISECS\fR ]
+Wait until a pane has been quiet \fB\-s\fR seconds (5), rings the bell
+or exits; print \fBidle\fR \fIN\fRs, \fBbell\fR or \fBexited\fR \fIN\fR.
+Any pane: an agent following another agent's turn.
+.TP
+.BR events
+Stream pane events, one line each, until interrupted:
+\fBblock\fR \fIPANE EXIT SECS COMMAND\fR, \fBbell\fR \fIPANE\fR,
+\fBnotify\fR \fIPANE TEXT\fR, \fBopen\fR, \fBexit\fR \fIPANE N\fR,
+\fBclose\fR.
+.TP
 .BR notify " [" \fITEXT\fR ]
 Outline the caller's pane in orange and set the window urgency hint.
 .TP
 .B guide
 How an AI agent should use tazterm (markdown).
+.PP
+\fB\-j\fR, \fB\-\-json\fR on ls, read, blocks, wait and events: JSON output.
 .PP
 Keys, tokens and passwords are masked as [REDACTED] unless
 \fBredact=false\fR.

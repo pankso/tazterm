@@ -195,3 +195,43 @@ tazterm_ai_explain_prompt(VteTerminal *term, int nlines, gboolean redact)
 	g_free(body);
 	return g_string_free(prompt, FALSE);
 }
+
+/* For `tazterm ctl --json`: machine-readable answers, no parsing of
+ * tab-separated text by agents. */
+void
+tazterm_json_string(GString *out, const char *s)
+{
+	char *valid = NULL;
+	const unsigned char *p;
+
+	if (!s) {
+		g_string_append(out, "null");
+		return;
+	}
+	if (!g_utf8_validate(s, -1, NULL))
+		s = valid = g_utf8_make_valid(s, -1);
+	g_string_append_c(out, '"');
+	for (p = (const unsigned char *) s; *p; p++) {
+		switch (*p) {
+		case '"':
+			g_string_append(out, "\\\"");
+			break;
+		case '\\':
+			g_string_append(out, "\\\\");
+			break;
+		case '\n':
+			g_string_append(out, "\\n");
+			break;
+		case '\t':
+			g_string_append(out, "\\t");
+			break;
+		default:
+			if (*p < 0x20 || *p == 0x7f)
+				g_string_append_printf(out, "\\u%04x", *p);
+			else
+				g_string_append_c(out, (char) *p);
+		}
+	}
+	g_string_append_c(out, '"');
+	g_free(valid);
+}

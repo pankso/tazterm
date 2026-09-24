@@ -48,6 +48,10 @@ char *tazterm_ai_redact(const char *text, guint *count);
 char *tazterm_ai_explain_prompt(VteTerminal *term, int nlines,
     gboolean redact);
 
+/* Append s as a JSON string literal (quotes, escapes; NULL -> null).
+ * s is UTF-8; control characters become \uXXXX. */
+void tazterm_json_string(GString *out, const char *s);
+
 G_END_DECLS
 
 #endif /* TAZTERM_AI_H */

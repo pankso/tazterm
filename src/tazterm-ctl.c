@@ -23,7 +23,11 @@
  *   blocks caller=ID pane=ID lines=N
  *   wait caller=ID pane=ID timeout=SECS  answered at the next command end:
  *                                        "OK EXIT\n" + block
+ *   wait ... idle=SECS                   answered when the pane has been
+ *                                        quiet SECS, rang or exited
+ *   events caller=ID                     kept open: one line per event
  *   notify caller=ID text=...
+ * Any request takes json=1: answers (and events) as JSON.
  */
 #include "tazterm-ctl.h"
 #include "tazterm-ai.h"
@@ -49,6 +53,9 @@
 #define CTL_DEFAULT_LINES 200
 #define CTL_MAX_LINES 100000
 #define CTL_MAX_NOTE 200
+#define CTL_MAX_SUBS 16         /* events subscribers */
+#define CTL_MAX_QUEUE 256       /* events not read yet: slow reader dropped */
+#define CTL_IDLE_POLL 500       /* ms, wait --idle */
 
 static GSocketService *service;
 static char *sock_path;
@@ -179,8 +186,34 @@ pane_activity(VteTerminal *t)
 	    idle);
 }
 
+/* One pane as a JSON object (ls --json). */
+static void
+ls_json(GString *out, VteTerminal *t, gboolean active, gboolean prev,
+    gboolean self, const char *activity, const char *proc,
+    const char *cwd, const char *title)
+{
+	int ec = tazterm_blocks_last_exit(t);
+
+	g_string_append_printf(out, "{\"id\":%d,\"role\":\"%s\","
+	    "\"active\":%s,\"previous\":%s,\"self\":%s,\"activity\":",
+	    tazterm_term_get_id(t), pane_role(t), active ? "true" : "false",
+	    prev ? "true" : "false", self ? "true" : "false");
+	tazterm_json_string(out, activity);
+	g_string_append(out, ",\"process\":");
+	tazterm_json_string(out, proc);
+	g_string_append(out, ",\"cwd\":");
+	tazterm_json_string(out, cwd);
+	g_string_append(out, ",\"title\":");
+	tazterm_json_string(out, title);
+	if (ec >= 0)
+		g_string_append_printf(out, ",\"last_exit\":%d", ec);
+	else
+		g_string_append(out, ",\"last_exit\":null");
+	g_string_append_c(out, '}');
+}
+
 static char *
-ctl_ls(int caller)
+ctl_ls(int caller, int json)
 {
 	GString *out;
 	GPtrArray *arr;
@@ -189,18 +222,30 @@ ctl_ls(int caller)
 
 	active = tazterm_split_active_term(ctl_split);
 	prev = tazterm_split_previous_term(ctl_split);
-	out = g_string_new(
+	out = g_string_new(json ? "[" :
 	    "# id\trole\tstate\tactivity\tprocess\tcwd\ttitle\n");
 	arr = tazterm_split_list(ctl_split);
 	for (i = 0; i < arr->len; i++) {
 		VteTerminal *t = g_ptr_array_index(arr, i);
 		int id = tazterm_term_get_id(t);
-		GString *state = g_string_new(NULL);
+		GString *state;
 		char *proc = tazterm_term_get_process(t);
 		char *cwd = tazterm_term_get_cwd(t);
 		char *title = g_strdup(vte_terminal_get_window_title(t));
 		char *activity = pane_activity(t);
 
+		if (json) {
+			if (i)
+				g_string_append_c(out, ',');
+			ls_json(out, t, t == active, t == prev, id == caller,
+			    activity, proc, cwd, title);
+			g_free(activity);
+			g_free(proc);
+			g_free(cwd);
+			g_free(title);
+			continue;
+		}
+		state = g_string_new(NULL);
 		if (t == active)
 			g_string_append(state, "active,");
 		if (t == prev)
@@ -224,6 +269,8 @@ ctl_ls(int caller)
 		g_free(title);
 	}
 	g_ptr_array_free(arr, TRUE);
+	if (json)
+		g_string_append(out, "]\n");
 	return g_string_free(out, FALSE);
 }
 
@@ -261,19 +308,69 @@ ctl_reply(CtlClient *c, char *reply)
 	    on_written, c);
 }
 
+/* Masked copy of s (s kept), the count added to *masked. */
+static char *
+ctl_mask(const char *s, guint *masked)
+{
+	guint n = 0;
+	char *r;
+
+	if (!s || !ctl_cfg || !ctl_cfg->ai_redact)
+		return g_strdup(s);
+	r = tazterm_ai_redact(s, &n);
+	*masked += n;
+	return r;
+}
+
+/* s masked, as a JSON string. */
+static void
+json_masked(GString *out, const char *s, guint *masked)
+{
+	char *m = ctl_mask(s, masked);
+
+	tazterm_json_string(out, m);
+	g_free(m);
+}
+
+/* A block as a JSON object, without the closing brace (the caller
+ * may add fields). Output only when with_output. */
+static void
+block_json(GString *out, VteTerminal *t, const TaztermBlock *b,
+    gboolean with_output, guint *masked)
+{
+	g_string_append_printf(out, "{\"pane\":%d,\"number\":%d,\"exit\":%d,"
+	    "\"seconds\":", tazterm_term_get_id(t), b->number, b->exit);
+	if (b->seconds >= 0)
+		g_string_append_printf(out, "%d", b->seconds);
+	else
+		g_string_append(out, "null");
+	g_string_append(out, ",\"command\":");
+	json_masked(out, b->command, masked);
+	if (with_output) {
+		g_string_append(out, ",\"output\":");
+		json_masked(out, b->output, masked);
+	}
+}
+
+/* Close a JSON answer: redaction count, brace, newline. */
+static char *
+json_end(GString *out, guint masked)
+{
+	g_string_append_printf(out, ",\"redacted\":%u}\n", masked);
+	return g_string_free(out, FALSE);
+}
+
 /* Masked copy of text for an agent, with a note when anything was. */
 static char *
 ctl_redact(char *text)
 {
 	guint masked = 0;
 	GString *out;
+	char *r;
 
-	if (ctl_cfg && ctl_cfg->ai_redact) {
-		char *r = tazterm_ai_redact(text, &masked);
-
-		g_free(text);
-		text = r;
-	}
+	r = ctl_mask(text, &masked);
+	g_free(text);
+	text = r;
 	out = g_string_new(text);
 	g_free(text);
 	if (out->len && out->str[out->len - 1] != '\n')
@@ -305,24 +402,44 @@ no_blocks_err(VteTerminal *t)
 	    "use read -n N)\n", tazterm_term_get_id(t));
 }
 
+/* Last block of t as text or JSON (read -l, wait), NULL when none. */
 static char *
-ctl_read(int caller, int pane, int lines, int last)
+last_block(VteTerminal *t, int json)
+{
+	TaztermBlock *blk;
+	GString *out;
+	guint masked = 0;
+
+	blk = tazterm_blocks_last(t);
+	if (!blk)
+		return NULL;
+	if (!json) {
+		char *text = tazterm_block_format(blk);
+
+		tazterm_block_free(blk);
+		return ctl_redact(text);
+	}
+	out = g_string_new(NULL);
+	block_json(out, t, blk, TRUE, &masked);
+	tazterm_block_free(blk);
+	return json_end(out, masked);
+}
+
+static char *
+ctl_read(int caller, int pane, int lines, int last, int json)
 {
 	VteTerminal *t;
+	GString *out;
 	char *text;
 	char *err = NULL;
+	guint masked = 0;
 
 	t = target_or_err(caller, pane, &err);
 	if (!t)
 		return err;
 	if (last) {
-		TaztermBlock *blk = tazterm_blocks_last(t);
-
-		if (!blk)
-			return no_blocks_err(t);
-		text = tazterm_block_format(blk);
-		tazterm_block_free(blk);
-		return ctl_redact(text);
+		text = last_block(t, json);
+		return text ? text : no_blocks_err(t);
 	}
 	if (lines == 0)
 		lines = CTL_DEFAULT_LINES;
@@ -332,17 +449,25 @@ ctl_read(int caller, int pane, int lines, int last)
 	if (tazterm_debug())
 		g_printerr("tazterm: ctl read pane %d\n",
 		    tazterm_term_get_id(t));
-	return ctl_redact(text);
+	if (!json)
+		return ctl_redact(text);
+	out = g_string_new(NULL);
+	g_string_append_printf(out, "{\"pane\":%d,\"text\":",
+	    tazterm_term_get_id(t));
+	json_masked(out, text, &masked);
+	g_free(text);
+	return json_end(out, masked);
 }
 
 /* Recent commands of a pane: number, exit, seconds, command. */
 static char *
-ctl_blocks(int caller, int pane, int lines)
+ctl_blocks(int caller, int pane, int lines, int json)
 {
 	VteTerminal *t;
 	GPtrArray *arr;
 	GString *out;
 	char *err = NULL;
+	guint masked = 0;
 	guint i;
 
 	t = target_or_err(caller, pane, &err);
@@ -351,29 +476,204 @@ ctl_blocks(int caller, int pane, int lines)
 	if (!tazterm_blocks_enabled(t))
 		return no_blocks_err(t);
 	arr = tazterm_blocks_list(t, lines > 0 ? lines : 20);
-	out = g_string_new("# n\texit\tseconds\tcommand\n");
+	out = g_string_new(json ? NULL : "# n\texit\tseconds\tcommand\n");
+	if (json)
+		g_string_append_printf(out, "{\"pane\":%d,\"blocks\":[",
+		    tazterm_term_get_id(t));
 	for (i = 0; i < arr->len; i++) {
 		TaztermBlock *b = g_ptr_array_index(arr, i);
 
+		if (json) {
+			if (i)
+				g_string_append_c(out, ',');
+			block_json(out, t, b, FALSE, &masked);
+			g_string_append_c(out, '}');
+			continue;
+		}
 		flatten(b->command);
 		g_string_append_printf(out, "%d\t%d\t%d\t%s\n", b->number,
 		    b->exit, b->seconds, b->command);
 	}
 	g_ptr_array_unref(arr);
+	if (json) {
+		g_string_append_c(out, ']');
+		return json_end(out, masked);
+	}
 	return ctl_redact(g_string_free(out, FALSE));
 }
 
-/* --- wait: answer when the pane's next command completes ----------- */
+/* --- events: a live stream of pane events ------------------------------ */
+
+/* An orchestrating agent follows the panes without polling: commands
+ * ending, bells, notes, panes opening, exiting, closing. Each
+ * subscriber has its own queue: one async write at a time. A reader
+ * that stops reading is dropped (write timeout, or queue full). */
+typedef struct {
+	CtlClient *client;
+	int json;
+	GQueue queue;        /* lines not written yet */
+	char *writing;       /* line being written, NULL when none */
+	gboolean dead;       /* freed once the pending write returns */
+} Sub;
+
+static GList *subs;
+
+static void
+sub_free(Sub *s)
+{
+	char *line;
+
+	subs = g_list_remove(subs, s);
+	while ((line = g_queue_pop_head(&s->queue)))
+		g_free(line);
+	g_free(s->writing);
+	ctl_client_free(s->client);
+	g_free(s);
+}
+
+static void sub_flush(Sub *s);
+
+static void
+on_sub_written(GObject *src, GAsyncResult *res, gpointer data)
+{
+	Sub *s = data;
+
+	if (!g_output_stream_write_all_finish(G_OUTPUT_STREAM(src), res, NULL,
+	    NULL) || s->dead) {
+		sub_free(s);
+		return;
+	}
+	g_clear_pointer(&s->writing, g_free);
+	sub_flush(s);
+}
+
+static void
+sub_flush(Sub *s)
+{
+	if (s->writing || g_queue_is_empty(&s->queue))
+		return;
+	s->writing = g_queue_pop_head(&s->queue);
+	g_output_stream_write_all_async(
+	    g_io_stream_get_output_stream(G_IO_STREAM(s->client->conn)),
+	    s->writing, strlen(s->writing), G_PRIORITY_DEFAULT, NULL,
+	    on_sub_written, s);
+}
+
+/* One event to every subscriber. Text: "EVENT PANE[ EXIT][ SECS][ TEXT]",
+ * JSON: {"event","pane"[,"exit"][,"seconds"][,"text"]}. exit and secs
+ * < 0, text NULL: absent. */
+static void
+ctl_emit(int pane, const char *event, int exit, int secs, const char *text)
+{
+	GString *line, *js;
+	GList *l, *next;
+	guint masked = 0;
+	char *m;
+
+	if (!subs)
+		return;
+	m = ctl_mask(text, &masked);
+	flatten(m);
+	line = g_string_new(NULL);
+	js = g_string_new(NULL);
+	g_string_append_printf(line, "%s %d", event, pane);
+	g_string_append_printf(js, "{\"event\":\"%s\",\"pane\":%d", event,
+	    pane);
+	if (exit >= 0) {
+		g_string_append_printf(line, " %d", exit);
+		g_string_append_printf(js, ",\"exit\":%d", exit);
+	}
+	if (secs >= 0) {
+		g_string_append_printf(line, " %d", secs);
+		g_string_append_printf(js, ",\"seconds\":%d", secs);
+	}
+	if (m) {
+		g_string_append_printf(line, " %s", m);
+		g_string_append(js, ",\"text\":");
+		tazterm_json_string(js, m);
+	}
+	g_string_append_c(line, '\n');
+	g_string_append(js, "}\n");
+	for (l = subs; l; l = next) {
+		Sub *s = l->data;
+
+		next = l->next;
+		if (s->dead)
+			continue;
+		if (g_queue_get_length(&s->queue) >= CTL_MAX_QUEUE) {
+			s->dead = TRUE; /* writing: freed by its callback */
+			continue;
+		}
+		g_queue_push_tail(&s->queue, g_strdup(s->json ? js->str :
+		    line->str));
+		sub_flush(s);
+	}
+	g_string_free(line, TRUE);
+	g_string_free(js, TRUE);
+	g_free(m);
+}
+
+void
+tazterm_ctl_event(VteTerminal *term, const char *event, int exit)
+{
+	ctl_emit(tazterm_term_get_id(term), event, exit, -1, NULL);
+}
+
+static char *
+ctl_events(CtlClient *c, int json)
+{
+	Sub *s;
+
+	if (g_list_length(subs) >= CTL_MAX_SUBS)
+		return g_strdup("ERR too many event listeners\n");
+	/* No read timeout (none issued), writes to a stuck reader fail. */
+	g_socket_set_timeout(g_socket_connection_get_socket(c->conn),
+	    CTL_TIMEOUT * 6);
+	s = g_new0(Sub, 1);
+	s->client = c;
+	s->json = json;
+	g_queue_init(&s->queue);
+	subs = g_list_prepend(subs, s);
+	if (tazterm_debug())
+		g_printerr("tazterm: ctl events listener\n");
+	return NULL; /* kept open */
+}
+
+/* --- wait: the next command end, or a quiet pane ------------------------ */
 
 typedef struct {
 	CtlClient *client;
 	VteTerminal *term;   /* weak ref: the pane may close */
 	guint timeout;
+	int json;
+	int idle;            /* --idle: quiet seconds; 0: next command end */
+	int since;           /* --idle: monotonic seconds of the request */
+	int bells;           /* --idle: bell count at the request */
 } Waiter;
 
 static GList *waiters;
+static guint idle_poll;
 
 static void on_waiter_term_gone(gpointer data, GObject *dead);
+
+static int
+now_secs(void)
+{
+	return (int) (g_get_monotonic_time() / G_USEC_PER_SEC);
+}
+
+/* Held pane (-hold) whose program ended: its exit code, else -1. */
+static int
+held_exit(VteTerminal *t)
+{
+	int st = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(t),
+	    "tazterm-exit"));
+
+	if (!st)
+		return -1;
+	return WIFEXITED(st - 1) ? WEXITSTATUS(st - 1) :
+	    128 + WTERMSIG(st - 1);
+}
 
 static void
 waiter_done(Waiter *w, char *reply)
@@ -407,35 +707,102 @@ on_waiter_timeout(gpointer data)
 	return G_SOURCE_REMOVE;
 }
 
-/* Block listener: wake every waiter of that pane. The reply starts
- * with "OK EXIT" so the client can exit with the command's status. */
+/* Block listener: wake the waiters of that pane (the reply starts with
+ * "OK EXIT": the client exits with the command's status), tell the
+ * event listeners. */
 static void
 on_block_done(VteTerminal *term, gpointer data)
 {
 	GList *l, *next;
+	int ec;
+
+	(void) data;
+	ec = tazterm_blocks_last_exit(term);
+	for (l = waiters; l; l = next) {
+		Waiter *w = l->data;
+		char *text;
+
+		next = l->next;
+		if (w->term != term || w->idle)
+			continue;
+		text = last_block(term, w->json);
+		if (!text)
+			continue;
+		waiter_done(w, g_strdup_printf("OK %d\n%s", ec, text));
+		g_free(text);
+	}
+	if (subs) {
+		TaztermBlock *blk = tazterm_blocks_last(term);
+
+		if (blk) {
+			ctl_emit(tazterm_term_get_id(term), "block", blk->exit,
+			    blk->seconds, blk->command);
+			tazterm_block_free(blk);
+		}
+	}
+}
+
+/* --idle answer: "idle Ns", "bell" or "exited N". */
+static char *
+idle_reply(Waiter *w, const char *state, int n)
+{
+	GString *out = g_string_new("OK 0\n");
+	int id = tazterm_term_get_id(w->term);
+
+	if (w->json) {
+		g_string_append_printf(out, "{\"pane\":%d,\"state\":\"%s\"",
+		    id, state);
+		if (n >= 0)
+			g_string_append_printf(out, ",\"%s\":%d",
+			    strcmp(state, "exited") ? "seconds" : "exit", n);
+		g_string_append(out, "}\n");
+	} else if (n >= 0) {
+		g_string_append_printf(out, strcmp(state, "exited") ?
+		    "%s %ds\n" : "%s %d\n", state, n);
+	} else {
+		g_string_append_printf(out, "%s\n", state);
+	}
+	return g_string_free(out, FALSE);
+}
+
+/* An agent pane is done when it goes quiet (its spinner stops), rings
+ * or exits. Checked twice a second while someone waits. */
+static gboolean
+on_idle_poll(gpointer data)
+{
+	GList *l, *next;
+	int left = 0;
 
 	(void) data;
 	for (l = waiters; l; l = next) {
 		Waiter *w = l->data;
-		TaztermBlock *blk;
-		char *text, *fmt;
+		int ec, last, quiet;
 
 		next = l->next;
-		if (w->term != term)
+		if (!w->idle)
 			continue;
-		blk = tazterm_blocks_last(term);
-		if (!blk)
-			continue;
-		fmt = tazterm_block_format(blk);
-		text = g_strdup_printf("OK %d\n%s", blk->exit, fmt);
-		g_free(fmt);
-		tazterm_block_free(blk);
-		waiter_done(w, ctl_redact(text));
+		ec = held_exit(w->term);
+		last = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(w->term),
+		    "tazterm-last-output"));
+		quiet = now_secs() - MAX(last, w->since);
+		if (ec >= 0)
+			waiter_done(w, idle_reply(w, "exited", ec));
+		else if (GPOINTER_TO_INT(g_object_get_data(G_OBJECT(w->term),
+		    "tazterm-bells")) != w->bells)
+			waiter_done(w, idle_reply(w, "bell", -1));
+		else if (quiet >= w->idle)
+			waiter_done(w, idle_reply(w, "idle", quiet));
+		else
+			left++;
 	}
+	if (left)
+		return G_SOURCE_CONTINUE;
+	idle_poll = 0;
+	return G_SOURCE_REMOVE;
 }
 
 static char *
-ctl_wait(CtlClient *c, int caller, int pane, int secs)
+ctl_wait(CtlClient *c, int caller, int pane, int secs, int idle, int json)
 {
 	VteTerminal *t;
 	Waiter *w;
@@ -444,29 +811,37 @@ ctl_wait(CtlClient *c, int caller, int pane, int secs)
 	t = target_or_err(caller, pane, &err);
 	if (!t)
 		return err;
-	if (!tazterm_blocks_enabled(t))
+	if (!idle && !tazterm_blocks_enabled(t))
 		return no_blocks_err(t);
 	w = g_new0(Waiter, 1);
 	w->client = c;
 	w->term = t;
+	w->json = json;
+	w->idle = idle;
+	w->since = now_secs();
+	w->bells = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(t),
+	    "tazterm-bells"));
 	g_object_weak_ref(G_OBJECT(t), on_waiter_term_gone, w);
 	w->timeout = g_timeout_add_seconds(secs > 0 ? secs : 600,
 	    on_waiter_timeout, w);
 	waiters = g_list_prepend(waiters, w);
+	if (idle && !idle_poll)
+		idle_poll = g_timeout_add(CTL_IDLE_POLL, on_idle_poll, NULL);
 	if (tazterm_debug())
-		g_printerr("tazterm: ctl wait pane %d\n",
-		    tazterm_term_get_id(t));
+		g_printerr("tazterm: ctl wait%s pane %d\n", idle ? " --idle" :
+		    "", tazterm_term_get_id(t));
 	return NULL; /* answered later */
 }
 
 /* An agent wants the user: orange outline on its pane (unless active),
  * urgency hint on the window (unless focused; the window clears it on
- * focus-in). */
+ * focus-in). Event listeners get the note. */
 static char *
 ctl_notify(int caller, char *note)
 {
 	GtkWidget *top;
 	VteTerminal *t;
+	char *cut;
 
 	t = caller ? pane_by_id(caller) : NULL;
 	if (t)
@@ -474,14 +849,12 @@ ctl_notify(int caller, char *note)
 	top = gtk_widget_get_toplevel(ctl_split);
 	if (GTK_IS_WINDOW(top) && !gtk_window_is_active(GTK_WINDOW(top)))
 		gtk_window_set_urgency_hint(GTK_WINDOW(top), TRUE);
-	if (tazterm_debug()) {
-		char *cut = g_utf8_substring(note ? note : "", 0,
-		    CTL_MAX_NOTE);
-
-		flatten(cut);
+	cut = g_utf8_substring(note ? note : "", 0, CTL_MAX_NOTE);
+	flatten(cut);
+	ctl_emit(caller, "notify", -1, -1, cut);
+	if (tazterm_debug())
 		g_printerr("tazterm: ctl notify pane %d: %s\n", caller, cut);
-		g_free(cut);
-	}
+	g_free(cut);
 	return g_strdup("");
 }
 
@@ -507,14 +880,15 @@ arg_int(char **tok, const char *key, int min, int max, int *out)
 	return TRUE;
 }
 
-/* Reply text, or NULL when the answer comes later (wait). */
+/* Reply text, or NULL when the answer comes later (wait, events). */
 static char *
 ctl_dispatch(CtlClient *c, char *line)
 {
 	char *note;
 	char **tok;
 	char *reply;
-	int caller = 0, pane = 0, lines = 0, last = 0, secs = 0;
+	int caller = 0, pane = 0, lines = 0, last = 0, secs = 0, idle = 0;
+	int json = 0;
 
 	if (!ctl_split)
 		return g_strdup("ERR not ready\n");
@@ -523,21 +897,25 @@ ctl_dispatch(CtlClient *c, char *line)
 		*note = '\0';
 		note += strlen(" text=");
 	}
-	tok = g_strsplit(line, " ", 10);
+	tok = g_strsplit(line, " ", 12);
 	if (!tok[0] || !arg_int(tok, "caller", 0, G_MAXINT, &caller) ||
 	    !arg_int(tok, "pane", 0, G_MAXINT, &pane) ||
 	    !arg_int(tok, "lines", -1, G_MAXINT, &lines) ||
 	    !arg_int(tok, "last", 0, 1, &last) ||
-	    !arg_int(tok, "timeout", 0, 86400, &secs))
+	    !arg_int(tok, "timeout", 0, 86400, &secs) ||
+	    !arg_int(tok, "idle", 0, 86400, &idle) ||
+	    !arg_int(tok, "json", 0, 1, &json))
 		reply = g_strdup("ERR bad request\n");
 	else if (!strcmp(tok[0], "ls"))
-		reply = ctl_ls(caller);
+		reply = ctl_ls(caller, json);
 	else if (!strcmp(tok[0], "read"))
-		reply = ctl_read(caller, pane, lines, last);
+		reply = ctl_read(caller, pane, lines, last, json);
 	else if (!strcmp(tok[0], "blocks"))
-		reply = ctl_blocks(caller, pane, lines);
+		reply = ctl_blocks(caller, pane, lines, json);
 	else if (!strcmp(tok[0], "wait"))
-		reply = ctl_wait(c, caller, pane, secs);
+		reply = ctl_wait(c, caller, pane, secs, idle, json);
+	else if (!strcmp(tok[0], "events"))
+		reply = ctl_events(c, json);
 	else if (!strcmp(tok[0], "notify"))
 		reply = ctl_notify(caller, note);
 	else
@@ -755,6 +1133,18 @@ static const char guide[] =
 "  your pane, urgency hint on the window). Use it when a long task is\n"
 "  done or you need a decision.\n"
 "\n"
+"## Following other panes (agents working side by side)\n"
+"\n"
+"- `tazterm ctl wait --idle -p ID [-s SECS]`: blocks until pane ID has\n"
+"  been quiet SECS seconds (default 5), rings the bell or exits; prints\n"
+"  `idle Ns`, `bell` or `exited N`. Any pane, any shell: the way to\n"
+"  know another agent finished its turn.\n"
+"- `tazterm ctl events`: one line per event, until interrupted:\n"
+"  `block PANE EXIT SECS command`, `bell PANE`, `notify PANE text`,\n"
+"  `open PANE`, `exit PANE N`, `close PANE`.\n"
+"- `-j` (`--json`) on ls, read, blocks, wait and events: JSON, one\n"
+"  object per answer or per event, secrets already masked.\n"
+"\n"
 "## Good practice\n"
 "\n"
 "- \"Look at my terminal\", \"this error\", \"it failed\": run\n"
@@ -785,9 +1175,15 @@ usage(FILE *f)
 "  wait [-p ID] [-t S]   block until the next command in the pane ends,\n"
 "                        print it, exit with its status (default 600 s)\n"
 "                        (-l, blocks, wait: bash panes)\n"
+"  wait --idle [-s S]    block until the pane is quiet S seconds\n"
+"                        (default 5), rings or exits (any pane)\n"
+"  events                stream pane events, one per line: block, bell,\n"
+"                        notify, open, exit, close\n"
 "  notify [TEXT]         ask for the user: outline the caller's pane,\n"
 "                        urgency hint on the window\n"
 "  guide                 how an AI agent should use tazterm (markdown)\n"
+"\n"
+"  -j, --json            ls, read, blocks, wait, events: JSON output\n"
 "\n"
 "Socket: $TAZTERM_SOCKET (set in every pane), else the only running\n"
 "tazterm. Secrets are masked unless [ai] redact=false.\n", f);
@@ -826,11 +1222,14 @@ find_socket(void)
 	return NULL;
 }
 
+/* One request, then the answer to stdout. stream (events): no read
+ * timeout, output flushed as it comes, until the window goes away. */
 static int
-exchange(const char *path, const char *req, int wait_secs)
+exchange(const char *path, const char *req, int wait_secs, int stream)
 {
 	struct sockaddr_un sa;
 	struct timeval tv = { CTL_TIMEOUT * 2 + wait_secs, 0 };
+	struct timeval none = { 0, 0 };
 	GString *buf;
 	char chunk[8192];
 	gsize left;
@@ -853,7 +1252,8 @@ exchange(const char *path, const char *req, int wait_secs)
 			close(fd);
 		return 1;
 	}
-	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, stream ? &none : &tv,
+	    sizeof tv);
 	setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
 	for (p = req, left = strlen(req); left > 0; ) {
 		n = write(fd, p, left);
@@ -876,6 +1276,11 @@ exchange(const char *path, const char *req, int wait_secs)
 			continue;
 		if (n <= 0)
 			break;
+		if (stream && !g_str_has_prefix(chunk, "ERR ")) {
+			fwrite(chunk, 1, n, stdout);
+			fflush(stdout);
+			continue;
+		}
 		g_string_append_len(buf, chunk, n);
 	}
 	close(fd);
@@ -911,8 +1316,8 @@ tazterm_ctl_client(int argc, char **argv)
 	const char *env;
 	char *path;
 	char *req = NULL;
-	gint64 caller = 0, pane = 0, lines = 0, secs = 600;
-	int last = 0;
+	gint64 caller = 0, pane = 0, lines = 0, secs = 600, quiet = 5;
+	int last = 0, idle = 0, json = 0;
 	int i, ret;
 
 	if (argc >= 1 && !strcmp(argv[0], "guide")) {
@@ -931,14 +1336,30 @@ tazterm_ctl_client(int argc, char **argv)
 	    NULL))
 		caller = 0;
 
-	if (!strcmp(cmd, "ls") && argc == 1) {
-		req = g_strdup_printf("ls caller=%d\n", (int) caller);
+	if (!strcmp(cmd, "ls") || !strcmp(cmd, "events")) {
+		for (i = 1; i < argc; i++) {
+			if (strcmp(argv[i], "-j") && strcmp(argv[i], "--json"))
+				goto bad;
+			json = 1;
+		}
+		req = g_strdup_printf("%s caller=%d json=%d\n", cmd,
+		    (int) caller, json);
 	} else if (!strcmp(cmd, "read") || !strcmp(cmd, "blocks") ||
 	    !strcmp(cmd, "wait")) {
 		for (i = 1; i < argc; i++) {
 			if (!strcmp(argv[i], "-l") ||
 			    !strcmp(argv[i], "--last")) {
 				last = 1;
+			} else if (!strcmp(argv[i], "-j") ||
+			    !strcmp(argv[i], "--json")) {
+				json = 1;
+			} else if (!strcmp(argv[i], "-i") ||
+			    !strcmp(argv[i], "--idle")) {
+				idle = 1;
+			} else if (!strcmp(argv[i], "-s") && i + 1 < argc) {
+				if (!g_ascii_string_to_signed(argv[++i], 10, 1,
+				    3600, &quiet, NULL))
+					goto bad;
 			} else if (!strcmp(argv[i], "-t") && i + 1 < argc) {
 				if (!g_ascii_string_to_signed(argv[++i], 10, 1,
 				    86400, &secs, NULL))
@@ -958,8 +1379,9 @@ tazterm_ctl_client(int argc, char **argv)
 			}
 		}
 		req = g_strdup_printf("%s caller=%d pane=%d lines=%d last=%d "
-		    "timeout=%d\n", cmd, (int) caller, (int) pane, (int) lines,
-		    last, (int) secs);
+		    "timeout=%d idle=%d json=%d\n", cmd, (int) caller,
+		    (int) pane, (int) lines, last, (int) secs,
+		    idle ? (int) quiet : 0, json);
 	} else if (!strcmp(cmd, "notify")) {
 		char *note = g_strjoinv(" ", argv + 1);
 
@@ -976,7 +1398,8 @@ tazterm_ctl_client(int argc, char **argv)
 		g_free(req);
 		return 1;
 	}
-	ret = exchange(path, req, !strcmp(cmd, "wait") ? (int) secs : 0);
+	ret = exchange(path, req, !strcmp(cmd, "wait") ? (int) secs : 0,
+	    !strcmp(cmd, "events"));
 	g_free(path);
 	g_free(req);
 	return ret;
