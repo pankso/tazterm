@@ -122,6 +122,18 @@ if command -v bash >/dev/null; then
 	sleep 1
 fi
 
+# An agent started by hand (not an agent split) is still an agent.
+if command -v bash >/dev/null; then
+	cp "$(command -v bash)" "$XDG_CACHE_HOME/claude"
+	"$BIN" -e "$XDG_CACHE_HOME/claude" -c 'sleep 30; true' \
+		>/dev/null 2>&1 &
+	pid=$!
+	sleep 2
+	check "agent found by its process" 'ctl ls | grep -q "^1	agent	"'
+	kill $pid
+	sleep 1
+fi
+
 check "-v without display" 'DISPLAY= "$BIN" -v | grep -q "^tazterm "'
 
 exit $fails

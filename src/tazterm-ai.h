@@ -26,12 +26,22 @@ extern const char *const tazterm_ai_known_agents[];
 
 /* Detect agents present on PATH. Returns the found names
  * (free with g_strfreev) and the default per cfg_agent
- * ("auto" = first found, else the requested name when present). */
+ * ("auto" = first found, else the requested name when present;
+ * cfg_agent may carry arguments: "claude --continue"). */
 char **tazterm_ai_detect(const char *cfg_agent, char **def_out);
 
-/* Agent launch command in a shell (overridable for tests via
- * TAZTERM_AGENT_CMD). Returns a static string. */
-const char *tazterm_ai_launch_cmd(const char *agent);
+/* Command starting agent: cfg_agent when it names that agent with its
+ * arguments, else the bare name (TAZTERM_AGENT_CMD overrides, tests).
+ * Points into its arguments or a static string. */
+const char *tazterm_ai_launch_cmd(const char *agent, const char *cfg_agent);
+
+/* TRUE when process name comm is an agent: a known one, or the
+ * program of cfg_agent. */
+gboolean tazterm_ai_is_agent_name(const char *comm, const char *cfg_agent);
+
+/* Pane running an agent: opened as one (agent split), or an agent in
+ * the foreground (claude typed in a shell pane). */
+gboolean tazterm_ai_pane_is_agent(VteTerminal *term, const char *cfg_agent);
 
 /* Last n lines of output, scrollback included (raw text, trailing
  * blanks trimmed). n <= 0: everything. Free it (g_free). */

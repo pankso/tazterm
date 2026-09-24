@@ -20,7 +20,8 @@ Coding agents run in a terminal, and the first thing they ask is "paste me the e
 - Per-pane status line: id, role (shell, agent, command), foreground process, directory, activity
 - Command blocks for bash: every command with its output, exit code and duration; jump from prompt to prompt
 - `tazterm ctl`: `ls`, `read`, `read -l`, `blocks`, `wait`, `wait --idle`, `events`, `notify`, `guide`, with JSON output (`-j`)
-- Agent panes: detects claude, opencode and navette, opens one in a split, sends a selection or the last failed command to it (never submitted: you add your question)
+- Agent panes: detects claude, opencode and navette (also when started by hand in a shell), opens one in a split, sends a selection or the last failed command to the agent you used last (never submitted: you add your question). An agent that quits leaves its pane: Enter starts it again. `agent=` takes arguments (`claude --continue`)
+- Click on a red `✗ exit N` in a status line: the failed command goes to the agent
 - Safe paste: control characters stripped, bracketed paste handled by VTE, confirmation before a multi-line paste into a shell that would run every line
 - Ctrl+click on URLs and on `file:line[:col]` (compilers, `grep -n`, tracebacks) to open your terminal editor at that line
 - Confirmation before closing a pane or the window where a program still runs
@@ -94,7 +95,7 @@ notify_after=30
 #editor=nano
 
 [ai]
-# auto | opencode | claude | navette
+# auto | opencode | claude | navette, or with arguments: claude --continue
 agent=auto
 explain_lines=200
 capture_lines=2000

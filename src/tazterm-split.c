@@ -14,6 +14,7 @@
  */
 #include "tazterm-split.h"
 #include "tazterm-term.h"
+#include "tazterm-ai.h"
 
 typedef struct {
 	TaztermConfig *cfg; /* not owned (app lifetime) */
@@ -106,9 +107,13 @@ on_term_focus_in(GtkWidget *term, GdkEventFocus *event, gpointer data)
 {
 	GtkWidget *split = GTK_WIDGET(data);
 	Split *sp = SPLIT(split);
+	static int focus_seq;
 
 	(void) event;
 
+	/* Order of visits: "send to agent" picks the last agent used. */
+	g_object_set_data(G_OBJECT(term), "tazterm-focus-seq",
+	    GINT_TO_POINTER(++focus_seq));
 	if (sp->active != VTE_TERMINAL(term)) {
 		if (sp->active)
 			leaf_set_focused(
@@ -155,14 +160,30 @@ leaf_of(VteTerminal *term)
 	return term_leaf(GTK_WIDGET(term));
 }
 
+static gboolean
+on_status_click(GtkWidget *widget, GdkEventButton *event, gpointer data)
+{
+	Split *sp = SPLIT(data);
+	VteTerminal *term;
+
+	if (event->type != GDK_BUTTON_PRESS || event->button != 1)
+		return FALSE;
+	term = g_object_get_data(G_OBJECT(widget), "tazterm-term");
+	if (term && sp->hooks.status_clicked)
+		sp->hooks.status_clicked(term, sp->hooks.term_setup_data);
+	return TRUE;
+}
+
 /* One-line bar under the pane; the window fills the two labels
- * ("tazterm-status-left" / "-right" on the terminal). */
+ * ("tazterm-status-left" / "-right" on the terminal). The right one
+ * is clickable (status_clicked hook). */
 static GtkWidget *
-status_bar_new(VteTerminal *term)
+status_bar_new(GtkWidget *split, VteTerminal *term)
 {
 	GtkWidget *bar;
 	GtkWidget *left;
 	GtkWidget *right;
+	GtkWidget *click;
 
 	bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
 	gtk_style_context_add_class(gtk_widget_get_style_context(bar),
@@ -173,8 +194,14 @@ status_bar_new(VteTerminal *term)
 	gtk_label_set_ellipsize(GTK_LABEL(left), PANGO_ELLIPSIZE_MIDDLE);
 	gtk_label_set_width_chars(GTK_LABEL(left), 1);
 	gtk_label_set_xalign(GTK_LABEL(left), 0.0);
+	click = gtk_event_box_new();
+	gtk_event_box_set_visible_window(GTK_EVENT_BOX(click), FALSE);
+	gtk_container_add(GTK_CONTAINER(click), right);
+	g_object_set_data(G_OBJECT(click), "tazterm-term", term);
+	g_signal_connect(click, "button-press-event",
+	    G_CALLBACK(on_status_click), split);
 	gtk_box_pack_start(GTK_BOX(bar), left, TRUE, TRUE, 0);
-	gtk_box_pack_end(GTK_BOX(bar), right, FALSE, FALSE, 0);
+	gtk_box_pack_end(GTK_BOX(bar), click, FALSE, FALSE, 0);
 	g_object_set_data(G_OBJECT(term), "tazterm-status-left", left);
 	g_object_set_data(G_OBJECT(term), "tazterm-status-right", right);
 	return bar;
@@ -208,7 +235,7 @@ leaf_new(Split *sp, GtkWidget *split, char **command,
 	box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_box_pack_start(GTK_BOX(box), GTK_WIDGET(term), TRUE, TRUE, 0);
 	if (sp->cfg->status_bar)
-		gtk_box_pack_end(GTK_BOX(box), status_bar_new(term), FALSE,
+		gtk_box_pack_end(GTK_BOX(box), status_bar_new(split, term), FALSE,
 		    FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(leaf), box);
 	g_object_set_data(G_OBJECT(leaf), "tazterm-term", term);
@@ -368,16 +395,21 @@ tazterm_split_find_agent(GtkWidget *split)
 {
 	GPtrArray *arr;
 	VteTerminal *found = NULL;
+	Split *sp = SPLIT(split);
+	int best = -1;
 	guint i;
 
 	arr = g_ptr_array_new();
 	collect_terms(split, arr);
 	for (i = 0; i < arr->len; i++) {
 		VteTerminal *t = VTE_TERMINAL(g_ptr_array_index(arr, i));
+		int seen = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(t),
+		    "tazterm-focus-seq"));
 
-		if (g_object_get_data(G_OBJECT(t), "tazterm-agent")) {
+		if (seen > best && tazterm_ai_pane_is_agent(t,
+		    sp->cfg->ai_agent)) {
 			found = t;
-			break;
+			best = seen;
 		}
 	}
 	g_ptr_array_free(arr, TRUE);

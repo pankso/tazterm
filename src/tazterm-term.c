@@ -413,10 +413,13 @@ env_set_pane(char ***envv, VteTerminal *term)
 {
 	char *id;
 
-	id = g_strdup_printf("%d", next_pane_id);
-	g_object_set_data(G_OBJECT(term), "tazterm-pane-id",
-	    GINT_TO_POINTER(next_pane_id));
-	next_pane_id++;
+	/* Respawn (agent restart): the pane keeps its id. */
+	if (!tazterm_term_get_id(term)) {
+		g_object_set_data(G_OBJECT(term), "tazterm-pane-id",
+		    GINT_TO_POINTER(next_pane_id));
+		next_pane_id++;
+	}
+	id = g_strdup_printf("%d", tazterm_term_get_id(term));
 	*envv = g_environ_setenv(*envv, "TAZTERM_PANE", id, TRUE);
 	g_free(id);
 	*envv = g_environ_setenv(*envv, "TERM_PROGRAM", "tazterm", TRUE);
@@ -456,6 +459,24 @@ tazterm_command_argv(TaztermConfig *cfg, const char *command)
 	if (!g_shell_parse_argv(command, NULL, &argv, NULL))
 		return NULL;
 	return argv;
+}
+
+/* Environment of every pane program. */
+static char **
+spawn_env(VteTerminal *term)
+{
+	char **envv;
+
+	envv = g_get_environ();
+	/* Exported by integration v3: drop it or a nested tazterm skips
+	 * its own hook. */
+	envv = g_environ_unsetenv(envv, "TAZTERM_OSC7");
+	/* VTE 0.56 keeps the caller's TERM when envv is given: a session
+	 * started from the console leaks TERM=linux (8 colors, 256-color
+	 * TUIs fall back to plain yellow). Say what VTE really is. */
+	envv = g_environ_setenv(envv, "TERM", "xterm-256color", TRUE);
+	env_set_pane(&envv, term);
+	return envv;
 }
 
 VteTerminal *
@@ -534,15 +555,7 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 		g_printerr("tazterm: spawn argv0='%s'%s cwd='%s'\n", argv[0],
 		    argv[1] ? " (+args)" : "", workdir);
 
-	envv = g_get_environ();
-	/* Exported by integration v3: drop it or a nested tazterm skips
-	 * its own hook. */
-	envv = g_environ_unsetenv(envv, "TAZTERM_OSC7");
-	/* VTE 0.56 keeps the caller's TERM when envv is given: a session
-	 * started from the console leaks TERM=linux (8 colors, 256-color
-	 * TUIs fall back to plain yellow). Say what VTE really is. */
-	envv = g_environ_setenv(envv, "TERM", "xterm-256color", TRUE);
-	env_set_pane(&envv, term);
+	envv = spawn_env(term);
 	if (rcfile) {
 		/* Per-pane token: a mark printed by `cat file` lacks it. */
 		char *token = g_strdup_printf("%08x%08x", g_random_int(),
@@ -579,6 +592,27 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 	return term;
 }
 
+
+void
+tazterm_term_respawn(VteTerminal *term, char **argv)
+{
+	const char *workdir;
+	char **envv;
+
+	workdir = g_object_get_data(G_OBJECT(term), "tazterm-workdir");
+	if (!workdir || !g_file_test(workdir, G_FILE_TEST_IS_DIR))
+		workdir = g_get_home_dir();
+	envv = spawn_env(term);
+	envv = g_environ_unsetenv(envv, "TAZTERM_MARK_TOKEN");
+	g_object_set_data(G_OBJECT(term), "tazterm-pid", NULL);
+	if (tazterm_debug())
+		g_printerr("tazterm: respawn pane %d: %s\n",
+		    tazterm_term_get_id(term), argv[0]);
+	vte_terminal_spawn_async(term, VTE_PTY_DEFAULT, workdir, argv, envv,
+	    G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, -1, NULL, on_spawn_ready,
+	    NULL);
+	g_strfreev(envv);
+}
 #define TAZTERM_SEARCH_MAX 256
 
 gboolean

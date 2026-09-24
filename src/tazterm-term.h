@@ -34,6 +34,10 @@ VteTerminal *tazterm_term_new_cmd(TaztermConfig *cfg,
     const char *shell_override, const char *workdir_override,
     char **command);
 
+/* Start argv again in a pane whose program ended (agent restart):
+ * same pane id, same directory. */
+void tazterm_term_respawn(VteTerminal *term, char **argv);
+
 /* argv for a command line: parsed and spawned directly, or through
  * "cfg->shell -c" when it uses shell syntax (; | & $ ...).
  * NULL when empty/unparsable. Free with g_strfreev. */

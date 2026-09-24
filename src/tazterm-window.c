@@ -67,6 +67,7 @@ win_free(gpointer data)
 #define TW(x) ((TaztermWin *) (x))
 
 static void status_update(VteTerminal *term);
+static gboolean agent_restart(VteTerminal *term);
 
 /* Debug aid: SIGUSR1 dumps the active pane's text (headless rendering
  * checks). Registered only when TAZTERM_DEBUG is set. */
@@ -452,23 +453,28 @@ ai_agent_split(TaztermWin *tw, const char *agent)
 			g_printerr("tazterm: agent split without agent\n");
 		return;
 	}
-	cmd = tazterm_ai_launch_cmd(agent);
+	cmd = tazterm_ai_launch_cmd(agent, tw->cfg->ai_agent);
 	argv = tazterm_command_argv(tw->cfg, cmd);
 	if (!argv) {
 		g_warning("tazterm: cannot parse agent command '%s'", cmd);
 		return;
 	}
 	tazterm_split_vertical_cmd(tw->split, argv);
-	g_strfreev(argv);
 	/* The new pane becomes active: tag it so "send to agent"
-	 * can find it later. */
+	 * can find it later, keep argv to restart the agent there. */
 	{
 		VteTerminal *pane = tazterm_split_active_term(tw->split);
 
-		if (pane)
+		if (pane) {
 			g_object_set_data(G_OBJECT(pane), "tazterm-agent",
 			    GINT_TO_POINTER(TRUE));
+			g_object_set_data_full(G_OBJECT(pane),
+			    "tazterm-agent-argv", argv,
+			    (GDestroyNotify) g_strfreev);
+			argv = NULL;
+		}
 	}
+	g_strfreev(argv);
 	if (tazterm_debug())
 		g_printerr("tazterm: agent split: %s (agent=%s)\n", cmd,
 		    agent);
@@ -494,15 +500,16 @@ ai_copy_scrollback(TaztermWin *tw)
 }
 
 /* Prompt to the clipboard, and pasted into the agent pane when there
- * is one (no Enter: the user reviews, adds a question, submits). */
+ * is one (no Enter: the user reviews, adds a question, submits).
+ * term: the pane to explain, NULL for the active one. */
 static void
-ai_explain(TaztermWin *tw)
+ai_explain(TaztermWin *tw, VteTerminal *term)
 {
-	VteTerminal *term;
 	VteTerminal *agent;
 	char *prompt;
 
-	term = tazterm_split_active_term(tw->split);
+	if (!term)
+		term = tazterm_split_active_term(tw->split);
 	if (!term)
 		return;
 	prompt = tazterm_ai_explain_prompt(term, tw->cfg->ai_explain_lines,
@@ -563,7 +570,7 @@ static void
 on_explain(GtkMenuItem *item, gpointer data)
 {
 	(void) item;
-	ai_explain(TW(data));
+	ai_explain(TW(data), NULL);
 }
 
 /* Pending send: win is a weak pointer (the window may close while
@@ -1005,6 +1012,11 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 		return TRUE;
 	}
 
+	/* Enter in an agent pane whose agent exited: restart it. */
+	if (!ctrl && !alt && (event->keyval == GDK_KEY_Return ||
+	    event->keyval == GDK_KEY_KP_Enter) && term && agent_restart(term))
+		return TRUE;
+
 	/* F11: fullscreen (no modifier, like usual terminals). */
 	if (!ctrl && !alt && !shift && event->keyval == GDK_KEY_F11) {
 		fullscreen_set(tw, !tw->fullscreen);
@@ -1083,7 +1095,7 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 			return TRUE;
 		case GDK_KEY_X:
 		case GDK_KEY_x:
-			ai_explain(tw);
+			ai_explain(tw, NULL);
 			return TRUE;
 		case GDK_KEY_Up:
 		case GDK_KEY_Down:
@@ -1200,6 +1212,19 @@ label_set(GtkWidget *label, const char *text, gboolean markup)
 		gtk_label_set_text(GTK_LABEL(label), text);
 }
 
+/* Agent pane for the status line: opened as one (even after it
+ * exited), or an agent in the foreground (claude typed in a shell). */
+static gboolean
+term_is_agent(VteTerminal *term)
+{
+	GtkWidget *top = gtk_widget_get_toplevel(GTK_WIDGET(term));
+	TaztermWin *tw = g_object_get_data(G_OBJECT(top), "tazterm-win");
+
+	if (g_object_get_data(G_OBJECT(term), "tazterm-agent"))
+		return TRUE;
+	return tazterm_ai_pane_is_agent(term, tw ? tw->cfg->ai_agent : NULL);
+}
+
 /* Left: "id · role · process · cwd". Right: what the pane is doing,
  * agents first: working (output flowing) or waiting for the user. */
 static void
@@ -1217,7 +1242,7 @@ status_update(VteTerminal *term)
 	right = g_object_get_data(G_OBJECT(term), "tazterm-status-right");
 	if (!left || !right)
 		return;
-	agent = g_object_get_data(G_OBJECT(term), "tazterm-agent") != NULL;
+	agent = term_is_agent(term);
 	shell_path = g_object_get_data(G_OBJECT(term), "tazterm-shell");
 	shell = shell_path != NULL;
 	exitst = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(term),
@@ -1366,33 +1391,76 @@ on_win_focus_in(GtkWidget *widget, GdkEvent *event, gpointer data)
 }
 
 /* A shell ended: remove its pane (close the window when last).
- * --hold pane: keep its output on screen, closed by the user. */
+ * --hold pane: keep its output on screen, closed by the user.
+ * Agent pane: kept too, Enter starts the agent again (it may have
+ * crashed, or the user quit to change its options). */
 static void
 on_child_exited(VteTerminal *term, int status, gpointer data)
 {
 	TaztermWin *tw = TW(data);
+	gboolean agent;
+	char *msg, *note;
 
 	tazterm_ctl_event(term, "exit", WIFEXITED(status) ?
 	    WEXITSTATUS(status) : 128 + WTERMSIG(status));
-	if (g_object_get_data(G_OBJECT(term), "tazterm-hold")) {
-		char *msg, *note;
-
-		if (WIFEXITED(status))
-			note = g_strdup_printf(_("exited with code %d — "
-			    "Ctrl+Shift+W to close"), WEXITSTATUS(status));
-		else
-			note = g_strdup_printf(_("killed by signal %d — "
-			    "Ctrl+Shift+W to close"), WTERMSIG(status));
-		msg = g_strdup_printf("\r\n[%s]\r\n", note);
-		g_free(note);
-		vte_terminal_feed(term, msg, -1);
-		g_free(msg);
-		g_object_set_data(G_OBJECT(term), "tazterm-exit",
-		    GINT_TO_POINTER(status + 1));
-		status_update(term);
+	agent = g_object_get_data(G_OBJECT(term), "tazterm-agent-argv") !=
+	    NULL;
+	if (!agent && !g_object_get_data(G_OBJECT(term), "tazterm-hold")) {
+		tazterm_split_remove_term(tw->split, term);
 		return;
 	}
-	tazterm_split_remove_term(tw->split, term);
+	if (agent)
+		note = WIFEXITED(status) ? g_strdup_printf(_("agent exited "
+		    "with code %d — Enter to restart, Ctrl+Shift+W to close"),
+		    WEXITSTATUS(status)) : g_strdup_printf(_("agent killed by "
+		    "signal %d — Enter to restart, Ctrl+Shift+W to close"),
+		    WTERMSIG(status));
+	else if (WIFEXITED(status))
+		note = g_strdup_printf(_("exited with code %d — "
+		    "Ctrl+Shift+W to close"), WEXITSTATUS(status));
+	else
+		note = g_strdup_printf(_("killed by signal %d — "
+		    "Ctrl+Shift+W to close"), WTERMSIG(status));
+	msg = g_strdup_printf("\r\n[%s]\r\n", note);
+	g_free(note);
+	vte_terminal_feed(term, msg, -1);
+	g_free(msg);
+	g_object_set_data(G_OBJECT(term), "tazterm-exit",
+	    GINT_TO_POINTER(status + 1));
+	status_update(term);
+}
+
+/* Enter (or a click on its status line) in an agent pane whose agent
+ * exited: start it again in place. FALSE when term is not one. */
+static gboolean
+agent_restart(VteTerminal *term)
+{
+	char **argv;
+
+	argv = g_object_get_data(G_OBJECT(term), "tazterm-agent-argv");
+	if (!argv || !g_object_get_data(G_OBJECT(term), "tazterm-exit"))
+		return FALSE;
+	g_object_set_data(G_OBJECT(term), "tazterm-exit", NULL);
+	vte_terminal_feed(term, "\r\n", -1);
+	tazterm_term_respawn(term, argv);
+	tazterm_ctl_event(term, "open", -1);
+	status_update(term);
+	return TRUE;
+}
+
+/* Click on a pane's status line: restart an exited agent, or send a
+ * failed command to the agent ("✗ exit 2"). */
+static void
+on_status_clicked(VteTerminal *term, gpointer data)
+{
+	TaztermWin *tw = TW(data);
+
+	if (agent_restart(term))
+		return;
+	if (tazterm_blocks_last_exit(term) > 0 ||
+	    GPOINTER_TO_INT(g_object_get_data(G_OBJECT(term),
+	    "tazterm-done")) > 1)
+		ai_explain(tw, term);
 }
 
 /* xterm-style geometry: COLSxROWS[+X+Y], the terminal cell grid. */
@@ -1456,7 +1524,7 @@ tazterm_window_new(TaztermConfig *cfg, const TaztermWinOpts *opts)
 {
 	TaztermWin *tw;
 	GtkWidget *box;
-	TaztermSplitHooks hooks;
+	TaztermSplitHooks hooks = { 0 };
 	VteTerminal *first;
 
 	tw = g_new0(TaztermWin, 1);
@@ -1515,6 +1583,7 @@ tazterm_window_new(TaztermConfig *cfg, const TaztermWinOpts *opts)
 	hooks.focus_data = tw;
 	hooks.empty = on_split_empty;
 	hooks.empty_data = tw;
+	hooks.status_clicked = on_status_clicked;
 	tw->split = tazterm_split_new(cfg, opts->shell, opts->workdir,
 	    opts->command, &hooks);
 	gtk_box_pack_start(GTK_BOX(box), tw->split, TRUE, TRUE, 0);

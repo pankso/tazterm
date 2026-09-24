@@ -78,6 +78,16 @@ main(void)
 	    "argv shell syntax");
 	g_strfreev(argv);
 
+	/* Agents: known names, configured command with arguments. */
+	check(tazterm_ai_is_agent_name("claude", "auto"), "agent known");
+	check(!tazterm_ai_is_agent_name("bash", "auto"), "agent not bash");
+	check(tazterm_ai_is_agent_name("aider", "/opt/bin/aider --yes"),
+	    "agent configured");
+	check(!strcmp(tazterm_ai_launch_cmd("claude", "claude --continue"),
+	    "claude --continue"), "launch with arguments");
+	check(!strcmp(tazterm_ai_launch_cmd("opencode", "claude --continue"),
+	    "opencode"), "launch other agent bare");
+
 	/* JSON strings: quotes, backslash, controls escaped, UTF-8 kept. */
 	{
 		GString *js = g_string_new(NULL);

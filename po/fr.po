@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tazterm\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-24 22:17+0200\n"
+"POT-Creation-Date: 2026-09-25 00:41+0200\n"
 "PO-Revision-Date: 2026-09-24 20:00+0200\n"
 "Last-Translator: SliTaz Contributors\n"
 "Language-Team: French\n"
@@ -16,207 +16,217 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/tazterm-window.c:351
+#: src/tazterm-window.c:359
 msgid "Close this pane?"
 msgstr "Fermer ce panneau ?"
 
-#: src/tazterm-window.c:351
+#: src/tazterm-window.c:359
 msgid "Close TazTerm?"
 msgstr "Fermer TazTerm ?"
 
-#: src/tazterm-window.c:353
+#: src/tazterm-window.c:361
 #, c-format
 msgid "Still running: %s. It will be stopped."
 msgstr "Encore en cours : %s. Il sera arrêté."
 
-#: src/tazterm-window.c:356 src/tazterm-term.c:846
+#: src/tazterm-window.c:364 src/tazterm-term.c:887
 msgid "Cancel"
 msgstr "Annuler"
 
-#: src/tazterm-window.c:357
+#: src/tazterm-window.c:365
 msgid "Close"
 msgstr "Fermer"
 
-#: src/tazterm-window.c:702
+#: src/tazterm-window.c:716
 msgid "Copy"
 msgstr "Copier"
 
-#: src/tazterm-window.c:703 src/tazterm-term.c:847
+#: src/tazterm-window.c:717 src/tazterm-term.c:888
 msgid "Paste"
 msgstr "Coller"
 
-#: src/tazterm-window.c:704
+#: src/tazterm-window.c:718
 msgid "Select All"
 msgstr "Tout sélectionner"
 
-#: src/tazterm-window.c:708
+#: src/tazterm-window.c:722
 msgid "Find…"
 msgstr "Rechercher…"
 
-#: src/tazterm-window.c:711
+#: src/tazterm-window.c:725
 msgid "Split Side by Side"
 msgstr "Diviser côté à côté"
 
-#: src/tazterm-window.c:713
+#: src/tazterm-window.c:727
 msgid "Split Stacked"
 msgstr "Diviser empilés"
 
-#: src/tazterm-window.c:714
+#: src/tazterm-window.c:728
 msgid "Close Pane"
 msgstr "Fermer ce panneau"
 
-#: src/tazterm-window.c:724
+#: src/tazterm-window.c:738
 #, c-format
 msgid "Open Agent Split (%s)"
 msgstr "Ouvrir un split agent (%s)"
 
-#: src/tazterm-window.c:735
+#: src/tazterm-window.c:749
 #, c-format
 msgid "Agent Split: %s"
 msgstr "Split agent : %s"
 
-#: src/tazterm-window.c:743
+#: src/tazterm-window.c:757
 msgid "Copy Scrollback"
 msgstr "Copier le scrollback"
 
-#: src/tazterm-window.c:745
+#: src/tazterm-window.c:759
 msgid "Explain Last Error"
 msgstr "Expliquer la dernière erreur"
 
-#: src/tazterm-window.c:759
+#: src/tazterm-window.c:773
 msgid "Send to Agent"
 msgstr "Envoyer à l'agent"
 
-#: src/tazterm-window.c:769
+#: src/tazterm-window.c:783
 msgid "Zoom In"
 msgstr "Zoom avant"
 
-#: src/tazterm-window.c:770
+#: src/tazterm-window.c:784
 msgid "Zoom Out"
 msgstr "Zoom arrière"
 
-#: src/tazterm-window.c:771
+#: src/tazterm-window.c:785
 msgid "Normal Size"
 msgstr "Taille normale"
 
-#: src/tazterm-window.c:778
+#: src/tazterm-window.c:792
 msgid "Fullscreen"
 msgstr "Plein écran"
 
-#: src/tazterm-window.c:1224
+#: src/tazterm-window.c:1256
 msgid "agent"
 msgstr "agent"
 
-#: src/tazterm-window.c:1224
+#: src/tazterm-window.c:1256
 msgid "shell"
 msgstr "shell"
 
-#: src/tazterm-window.c:1224
+#: src/tazterm-window.c:1256
 msgid "command"
 msgstr "commande"
 
-#: src/tazterm-window.c:1235
+#: src/tazterm-window.c:1267
 #, c-format
 msgid "done (exit %d)"
 msgstr "terminé (code %d)"
 
-#: src/tazterm-window.c:1236
+#: src/tazterm-window.c:1268
 msgid "done (signal)"
 msgstr "terminé (signal)"
 
-#: src/tazterm-window.c:1239
+#: src/tazterm-window.c:1271
 msgid "waiting for you"
 msgstr "attend une réponse"
 
-#: src/tazterm-window.c:1243 src/tazterm-window.c:1246
+#: src/tazterm-window.c:1275 src/tazterm-window.c:1278
 msgid "done"
 msgstr "fini"
 
-#: src/tazterm-window.c:1246 src/tazterm-window.c:1259
+#: src/tazterm-window.c:1278 src/tazterm-window.c:1291
 msgid "exit"
 msgstr "code"
 
-#: src/tazterm-window.c:1251 src/tazterm-window.c:1256
+#: src/tazterm-window.c:1283 src/tazterm-window.c:1288
 msgid "active"
 msgstr "actif"
 
-#: src/tazterm-window.c:1252
+#: src/tazterm-window.c:1284
 msgid "running"
 msgstr "en cours"
 
-#: src/tazterm-window.c:1256
+#: src/tazterm-window.c:1288
 msgid "working"
 msgstr "travaille"
 
-#: src/tazterm-window.c:1261
+#: src/tazterm-window.c:1293
 #, c-format
 msgid "idle · %s"
 msgstr "en attente · %s"
 
-#: src/tazterm-window.c:1263
+#: src/tazterm-window.c:1295
 #, c-format
 msgid "quiet · %s"
 msgstr "silencieux · %s"
 
-#: src/tazterm-window.c:1365
+#: src/tazterm-window.c:1413
+#, c-format
+msgid "agent exited with code %d — Enter to restart, Ctrl+Shift+W to close"
+msgstr "agent terminé, code %d — Entrée pour relancer, Ctrl+Shift+W pour fermer"
+
+#: src/tazterm-window.c:1415
+#, c-format
+msgid "agent killed by signal %d — Enter to restart, Ctrl+Shift+W to close"
+msgstr "agent tué par le signal %d — Entrée pour relancer, Ctrl+Shift+W pour fermer"
+
+#: src/tazterm-window.c:1419
 #, c-format
 msgid "exited with code %d — Ctrl+Shift+W to close"
 msgstr "terminé, code %d — Ctrl+Shift+W pour fermer"
 
-#: src/tazterm-window.c:1368
+#: src/tazterm-window.c:1422
 #, c-format
 msgid "killed by signal %d — Ctrl+Shift+W to close"
 msgstr "tué par le signal %d — Ctrl+Shift+W pour fermer"
 
-#: src/main.c:87
+#: src/main.c:94
 msgid "Shell start directory"
 msgstr "Dossier de démarrage du shell"
 
-#: src/main.c:88
+#: src/main.c:95
 msgid "DIR"
 msgstr "DOSSIER"
 
-#: src/main.c:90
+#: src/main.c:97
 msgid "Shell to run (default: /bin/sh)"
 msgstr "Shell à lancer (défaut : /bin/sh)"
 
-#: src/main.c:91
+#: src/main.c:98
 msgid "SHELL"
 msgstr "SHELL"
 
-#: src/main.c:93
+#: src/main.c:100
 msgid "Window title"
 msgstr "Titre de la fenêtre"
 
-#: src/main.c:93
+#: src/main.c:100
 msgid "TITLE"
 msgstr "TITRE"
 
-#: src/main.c:95
+#: src/main.c:102
 msgid "Size in characters (80x24[+X+Y])"
 msgstr "Taille en caractères (80x24[+X+Y])"
 
-#: src/main.c:96
+#: src/main.c:103
 msgid "GEOMETRY"
 msgstr "GÉOMÉTRIE"
 
-#: src/main.c:98
+#: src/main.c:105
 msgid "Keep the window after the -e command ends"
 msgstr "Garder la fenêtre après la fin de -e"
 
-#: src/main.c:100
+#: src/main.c:107
 msgid "Show the version"
 msgstr "Afficher la version"
 
-#: src/main.c:127
+#: src/main.c:134
 msgid "[-e COMMAND [ARGS...]] - light GTK3/VTE terminal"
 msgstr "[-e COMMANDE [ARGS...]] - terminal léger GTK3/VTE"
 
-#: src/tazterm-term.c:839
+#: src/tazterm-term.c:880
 #, c-format
 msgid "Paste %u lines into the shell?"
 msgstr "Coller %u lignes dans le shell ?"
 
-#: src/tazterm-term.c:842
+#: src/tazterm-term.c:883
 msgid "This shell runs each line as soon as it is pasted."
 msgstr "Ce shell exécute chaque ligne dès qu'elle est collée."

@@ -39,6 +39,9 @@ typedef struct {
 	/* Called when no pane remains (close the window). */
 	void (*empty)(gpointer data);
 	gpointer empty_data;
+	/* Click on the right part of a pane's status line ("✗ exit 2").
+	 * Gets the same data as term_setup. */
+	void (*status_clicked)(VteTerminal *term, gpointer data);
 } TaztermSplitHooks;
 
 /* New container with a first terminal: a shell, or command (argv,
@@ -50,8 +53,8 @@ GtkWidget *tazterm_split_new(TaztermConfig *cfg,
 /* Active pane's terminal (never NULL while a pane remains). */
 VteTerminal *tazterm_split_active_term(GtkWidget *split);
 
-/* First pane tagged as an agent (see "tazterm-agent" object data),
- * or NULL when there is none. */
+/* Agent pane (agent split, or an agent running in the foreground) the
+ * user was in last; the first one when none was visited. NULL: none. */
 VteTerminal *tazterm_split_find_agent(GtkWidget *split);
 
 /* Every pane's terminal, tree order (free with g_ptr_array_free). */

@@ -16,17 +16,37 @@
 #include "tazterm-term.h"
 #include "tazterm-blocks.h"
 
+#include <string.h>
+
 const char *const tazterm_ai_known_agents[] = {
 	"opencode", "claude", "navette", NULL
 };
+
+/* Program name of an agent= setting: "claude --continue" -> "claude",
+ * "/opt/bin/opencode" -> "opencode". NULL for auto/empty. g_free. */
+static char *
+cfg_agent_name(const char *cfg_agent)
+{
+	char **argv = NULL;
+	char *name = NULL;
+
+	if (!cfg_agent || !*cfg_agent || !strcmp(cfg_agent, "auto"))
+		return NULL;
+	if (g_shell_parse_argv(cfg_agent, NULL, &argv, NULL) && argv[0])
+		name = g_path_get_basename(argv[0]);
+	g_strfreev(argv);
+	return name;
+}
 
 char **
 tazterm_ai_detect(const char *cfg_agent, char **def_out)
 {
 	GPtrArray *found;
 	char *def = NULL;
+	char *want;
 	int i;
 
+	want = cfg_agent_name(cfg_agent);
 	found = g_ptr_array_new();
 	for (i = 0; tazterm_ai_known_agents[i]; i++) {
 		const char *name = tazterm_ai_known_agents[i];
@@ -36,32 +56,81 @@ tazterm_ai_detect(const char *cfg_agent, char **def_out)
 		if (path) {
 			g_ptr_array_add(found, g_strdup(name));
 			g_free(path);
-			if (!def && (!cfg_agent ||
-			    !g_strcmp0(cfg_agent, "auto") ||
-			    !g_strcmp0(cfg_agent, name)))
+			if (!def && (!want || !strcmp(want, name)))
 				def = g_strdup(name);
+		}
+	}
+	/* Configured agent outside the known list (another CLI agent). */
+	if (!def && want && !g_strv_contains(tazterm_ai_known_agents, want)) {
+		char *path = g_find_program_in_path(want);
+
+		if (path) {
+			g_ptr_array_add(found, g_strdup(want));
+			def = g_strdup(want);
+			g_free(path);
 		}
 	}
 	/* Explicit choice but missing binary: fall back to the first. */
 	if (!def && found->len > 0)
 		def = g_strdup(g_ptr_array_index(found, 0));
 	g_ptr_array_add(found, NULL);
+	g_free(want);
 
 	*def_out = def;
 	return (char **) g_ptr_array_free(found, FALSE);
 }
 
 const char *
-tazterm_ai_launch_cmd(const char *agent)
+tazterm_ai_launch_cmd(const char *agent, const char *cfg_agent)
 {
 	const char *env;
+	char *want;
+	gboolean full;
 
 	env = g_getenv("TAZTERM_AGENT_CMD");
 	if (env && *env)
 		return env;
+	/* agent=claude --continue: the whole command for that agent. */
+	want = cfg_agent_name(cfg_agent);
+	full = want && agent && !strcmp(want, agent);
+	g_free(want);
+	if (full)
+		return cfg_agent;
 	if (agent && *agent)
 		return agent;
 	return "opencode";
+}
+
+gboolean
+tazterm_ai_is_agent_name(const char *comm, const char *cfg_agent)
+{
+	char *want;
+	gboolean yes;
+
+	if (!comm || !*comm)
+		return FALSE;
+	if (g_strv_contains(tazterm_ai_known_agents, comm))
+		return TRUE;
+	want = cfg_agent_name(cfg_agent);
+	yes = want && !strcmp(want, comm);
+	g_free(want);
+	return yes;
+}
+
+gboolean
+tazterm_ai_pane_is_agent(VteTerminal *term, const char *cfg_agent)
+{
+	char *proc;
+	gboolean yes;
+
+	if (g_object_get_data(G_OBJECT(term), "tazterm-exit"))
+		return FALSE;
+	if (g_object_get_data(G_OBJECT(term), "tazterm-agent"))
+		return TRUE;
+	proc = tazterm_term_get_process(term);
+	yes = tazterm_ai_is_agent_name(proc, cfg_agent);
+	g_free(proc);
+	return yes;
 }
 
 char *

@@ -153,7 +153,8 @@ default_target(int caller)
 static const char *
 pane_role(VteTerminal *t)
 {
-	if (g_object_get_data(G_OBJECT(t), "tazterm-agent"))
+	if (g_object_get_data(G_OBJECT(t), "tazterm-agent") ||
+	    tazterm_ai_pane_is_agent(t, ctl_cfg ? ctl_cfg->ai_agent : NULL))
 		return "agent";
 	if (g_object_get_data(G_OBJECT(t), "tazterm-shell"))
 		return "shell";
