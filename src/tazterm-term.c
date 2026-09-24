@@ -1,5 +1,6 @@
 /* tazterm-term.c — VteTerminal wrapper: spawn, search, capture, paste. */
 #include "tazterm-term.h"
+#include "tazterm-blocks.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -170,7 +171,8 @@ tazterm_term_osc7_emit(void)
 /* Shell integration: the shell reports its cwd via OSC 7, which VTE
  * exposes through vte_terminal_get_current_directory_uri().
  * /etc/profile.d/vte.sh only covers login bash/zsh; here we target ash
- * (the SliTaz default) via $ENV, and bash via PROMPT_COMMAND when unset.
+ * (the SliTaz default) via $ENV. bash gets a --rcfile instead (OSC 7 +
+ * command block marks, see tazterm-blocks.c).
  * File owned by tazterm: rewritten when the version marker differs.
  * Users may append custom code BELOW the marker line.
  *
@@ -186,7 +188,7 @@ tazterm_term_osc7_emit(void)
 static const char integration_sh[] =
 "# " INTEGRATION_VERSION " (managed by tazterm, do not edit above)\n"
 "# ash/dash: sourced via $ENV. Reports cwd with OSC 7 for split panes.\n"
-"# bash is covered by PROMPT_COMMAND (see tazterm) or /etc/profile.d/vte.sh.\n"
+"# bash uses bash-integration.sh (--rcfile) instead.\n"
 "# Custom code may go BELOW the marker line (kept on upgrade).\n"
 "if [ -z \"$__tazterm_hooked\" ] && [ -n \"$PS1\" ]; then\n"
 "    __tazterm_hooked=1\n"
@@ -292,27 +294,12 @@ env_set_bin(char ***envv)
 	}
 }
 
-/* The binary path is embedded inside double quotes in shell code:
- * reject anything but a boring path so a weird install location
- * cannot break out of the quoting. */
-static gboolean
-bin_is_shell_safe(const char *bin)
+static const char *
+shell_base(const char *shell)
 {
-	const unsigned char *p;
+	const char *base = strrchr(shell, '/');
 
-	if (!bin || !*bin || *bin != '/')
-		return FALSE;
-	for (p = (const unsigned char *) bin; *p; p++) {
-		unsigned char c = *p;
-
-		if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-		    (c >= '0' && c <= '9') ||
-		    c == '/' || c == '-' || c == '_' || c == '.' ||
-		    c == '+' || c == ':')
-			continue;
-		return FALSE;
-	}
-	return TRUE;
+	return base ? base + 1 : shell;
 }
 
 /* Hook OSC 7 reporting into shell panes so splits can inherit the
@@ -323,30 +310,19 @@ env_integrate_shell(char ***envv, const char *shell)
 {
 	const char *base;
 	const char *old;
-	const char *bin;
 
 	env_set_bin(envv);
 
 	base = shell ? strrchr(shell, '/') : NULL;
 	base = base ? base + 1 : shell;
 	if (base && strstr(base, "bash")) {
+		/* bash: the --rcfile (tazterm-blocks.c) reports the cwd and
+		 * marks prompts. Drop the PROMPT_COMMAND that tazterm 0.5
+		 * exported, inherited by panes started from it. */
 		old = g_environ_getenv(*envv, "PROMPT_COMMAND");
-		if (!old || !*old) {
-			bin = g_environ_getenv(*envv, "TAZTERM_BIN");
-			if (!bin_is_shell_safe(bin)) {
-				if (tazterm_debug())
-					g_printerr(
-					    "tazterm: skip PROMPT_COMMAND"
-					    " (unsafe bin path)\n");
-				return;
-			}
-			*envv = g_environ_setenv(*envv, "PROMPT_COMMAND",
-			    "[ -x \"$TAZTERM_BIN\" ] && "
-			    "\"$TAZTERM_BIN\" --osc7",
-			    TRUE);
-		} else if (tazterm_debug()) {
-			g_printerr("tazterm: keep user PROMPT_COMMAND\n");
-		}
+		if (old && !strcmp(old, "[ -x \"$TAZTERM_BIN\" ] && "
+		    "\"$TAZTERM_BIN\" --osc7"))
+			*envv = g_environ_unsetenv(*envv, "PROMPT_COMMAND");
 		return;
 	}
 	/* ash/dash/sh: sourced via $ENV. */
@@ -449,7 +425,8 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 	PangoFontDescription *font;
 	const char *shell;
 	const char *workdir;
-	char *shell_argv[2];
+	char *shell_argv[4];
+	char *rcfile = NULL;
 	char **argv;
 	char **envv;
 
@@ -483,6 +460,12 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 		shell_argv[0] = (char *) shell;
 		shell_argv[1] = NULL;
 		argv = shell_argv;
+		if (strstr(shell_base(shell), "bash")) {
+			rcfile = tazterm_blocks_rcfile();
+			shell_argv[1] = "--rcfile";
+			shell_argv[2] = rcfile;
+			shell_argv[3] = NULL;
+		}
 	}
 	if (workdir_override && *workdir_override)
 		workdir = workdir_override;
@@ -509,6 +492,18 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 	 * TUIs fall back to plain yellow). Say what VTE really is. */
 	envv = g_environ_setenv(envv, "TERM", "xterm-256color", TRUE);
 	env_set_pane(&envv, term);
+	if (rcfile) {
+		/* Per-pane token: a mark printed by `cat file` lacks it. */
+		char *token = g_strdup_printf("%08x%08x", g_random_int(),
+		    g_random_int());
+
+		envv = g_environ_setenv(envv, "TAZTERM_MARK_TOKEN", token,
+		    TRUE);
+		tazterm_blocks_attach(term, token);
+		g_free(token);
+	} else {
+		envv = g_environ_unsetenv(envv, "TAZTERM_MARK_TOKEN");
+	}
 	if (argv == shell_argv) {
 		env_integrate_shell(&envv, shell);
 		/* Shell pane: remembered for the paste safety check. */
@@ -528,6 +523,7 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 	    on_spawn_ready,
 	    NULL);
 	g_strfreev(envv);
+	g_free(rcfile);
 
 	return term;
 }

@@ -62,7 +62,19 @@ tazterm ctl ls              # id, rôle (shell/agent/cmd), état, processus, cwd
 tazterm ctl read            # 200 dernières lignes du panneau d'où vient l'utilisateur
 tazterm ctl read -p 1 -n 50 # panneau 1, 50 lignes (-a : tout le scrollback)
 tazterm ctl notify "fini"   # contour orange du panneau + fenêtre en urgence
+tazterm ctl read -l         # dernière commande : commande, sortie, [exit N, durée]
+tazterm ctl blocks          # commandes récentes : n°, code, secondes, commande
+tazterm ctl wait -t 600     # attend la fin de la prochaine commande, sort avec son code
 ```
+
+**Blocs de commande (panneaux bash)** : tazterm lance bash avec
+`--rcfile ~/.config/tazterm/bash-integration.sh`, qui source `~/.bashrc`
+puis marque chaque prompt (OSC 6 avec un jeton par panneau : un `cat`
+de fichier ne peut pas forger de faux blocs). Donne `read -l`, `blocks`,
+`wait`, `Ctrl+Shift+X` sur la dernière commande exacte,
+`Ctrl+Shift+↑/↓` pour sauter de prompt en prompt, et « ✗ code N » /
+« en cours · 2m » dans la barre d'état. busybox ash n'a aucun hook de
+prompt : pas de blocs, `read -n` reste disponible.
 
 - **Lecture seule** : un agent ne peut jamais taper dans un panneau.
   La sortie terminal n'est pas fiable (curl, logs, README cloné) et un

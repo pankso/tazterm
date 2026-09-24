@@ -7,6 +7,7 @@
 #include "tazterm-ai.h"
 
 #include "tazterm-term.h"
+#include "tazterm-blocks.h"
 
 const char *const tazterm_ai_known_agents[] = {
 	"opencode", "claude", "navette", NULL
@@ -149,8 +150,17 @@ tazterm_ai_explain_prompt(VteTerminal *term, int nlines, gboolean redact)
 	char *body;
 	char *cwd;
 	GString *prompt;
+	TaztermBlock *blk;
 
-	last = tazterm_ai_last_lines(term, nlines);
+	/* bash pane: the last command exactly (with its exit code),
+	 * else the last nlines. */
+	blk = tazterm_blocks_last(term);
+	if (blk) {
+		last = tazterm_block_format(blk);
+		tazterm_block_free(blk);
+	} else {
+		last = tazterm_ai_last_lines(term, nlines);
+	}
 	if (redact) {
 		char *masked = tazterm_ai_redact(last, NULL);
 

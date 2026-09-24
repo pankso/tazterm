@@ -19,6 +19,7 @@
  */
 #include "tazterm-window.h"
 #include "tazterm-ai.h"
+#include "tazterm-blocks.h"
 #include "tazterm-ctl.h"
 #include "tazterm-split.h"
 #include "tazterm-term.h"
@@ -688,6 +689,23 @@ on_button_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 
 /* --- keyboard ----------------------------------------------------------- */
 
+/* Ctrl+Shift+Up/Down: scroll so the previous / next prompt is the top
+ * row (bash panes). Past the last prompt: back to the bottom. */
+static void
+prompt_jump(VteTerminal *term, int dir)
+{
+	GtkAdjustment *va;
+	glong top, row;
+
+	va = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(term));
+	top = (glong) gtk_adjustment_get_value(va);
+	if (tazterm_blocks_prompt_row(term, top, dir, &row))
+		gtk_adjustment_set_value(va, (gdouble) row);
+	else if (dir > 0)
+		gtk_adjustment_set_value(va, gtk_adjustment_get_upper(va) -
+		    gtk_adjustment_get_page_size(va));
+}
+
 static gboolean
 on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 {
@@ -789,6 +807,12 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 		case GDK_KEY_X:
 		case GDK_KEY_x:
 			ai_explain(tw);
+			return TRUE;
+		case GDK_KEY_Up:
+		case GDK_KEY_Down:
+			if (term)
+				prompt_jump(term,
+				    event->keyval == GDK_KEY_Up ? -1 : 1);
 			return TRUE;
 		default:
 			break;
@@ -908,7 +932,7 @@ status_update(VteTerminal *term)
 	const char *shell_path;
 	const char *base;
 	char *rtext;
-	int idle, exitst;
+	int idle, exitst, running, last_exit;
 
 	left = g_object_get_data(G_OBJECT(term), "tazterm-status-left");
 	right = g_object_get_data(G_OBJECT(term), "tazterm-status-right");
@@ -941,9 +965,19 @@ status_update(VteTerminal *term)
 	else if (g_object_get_data(G_OBJECT(term), "tazterm-bell"))
 		rtext = g_strdup_printf("<span foreground=\"#f57900\">● %s"
 		    "</span>", _("attend une réponse"));
-	else if (idle < STATUS_BUSY_SECS)
+	else if ((running = tazterm_blocks_running(term)) >= 0) {
+		char *rage = fmt_age(running);
+
+		rtext = g_strdup_printf("<span foreground=\"#73d216\">● %s · "
+		    "%s</span>", idle < STATUS_BUSY_SECS ? _("actif") :
+		    _("en cours"), rage);
+		g_free(rage);
+	} else if (idle < STATUS_BUSY_SECS)
 		rtext = g_strdup_printf("<span foreground=\"#73d216\">● %s"
 		    "</span>", agent ? _("travaille") : _("actif"));
+	else if (!agent && (last_exit = tazterm_blocks_last_exit(term)) > 0)
+		rtext = g_strdup_printf("<span foreground=\"#ef2929\">✗ %s "
+		    "%d</span>", _("code"), last_exit);
 	else if (agent)
 		rtext = g_strdup_printf(_("en attente · %s"), age);
 	else if (shell && proc && g_strcmp0(proc, base) != 0)

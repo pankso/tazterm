@@ -12,6 +12,7 @@ LOCALEDIR ?= $(PREFIX)/share/locale
 CFLAGS  += -DGETTEXT_PACKAGE=\"$(GETTEXT_PACKAGE)\" -DLOCALEDIR=\"$(LOCALEDIR)\"
 
 OBJS = main.o tazterm-window.o tazterm-term.o tazterm-config.o tazterm-split.o tazterm-ai.o \
+       tazterm-blocks.o \
        tazterm-ctl.o
 
 all: tazterm
