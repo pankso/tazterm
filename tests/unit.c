@@ -9,6 +9,7 @@
  * command parsing. Exit status = number of failures. */
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "tazterm-ai.h"
 #include "tazterm-config.h"
@@ -87,6 +88,34 @@ main(void)
 	    "claude --continue"), "launch with arguments");
 	check(!strcmp(tazterm_ai_launch_cmd("opencode", "claude --continue"),
 	    "opencode"), "launch other agent bare");
+
+	/* Themes: palette from the theme, background= wins over it. */
+	{
+		char *dir = g_dir_make_tmp("tazterm-unit-XXXXXX", NULL);
+		char *conf = g_build_filename(dir, "tazterm", "tazterm.conf",
+		    NULL);
+		char *sub = g_path_get_dirname(conf);
+		TaztermConfig *c;
+
+		g_mkdir_with_parents(sub, 0700);
+		g_file_set_contents(conf, "[terminal]\ntheme=solarized-dark\n"
+		    "background=#000000\ncursor_shape=ibeam\n", -1, NULL);
+		g_setenv("XDG_CONFIG_HOME", dir, TRUE);
+		c = tazterm_config_load();
+		check(c->palette_set && (int) (c->palette[1].red * 255 + .5) ==
+		    0xdc, "theme palette");
+		check(c->bg_set && c->background.red == 0 &&
+		    c->background.blue == 0, "background overrides theme");
+		check(c->cursor_shape == VTE_CURSOR_SHAPE_IBEAM, "cursor shape");
+		check(c->bold_is_bright == -1, "bold_is_bright unset");
+		tazterm_config_free(c);
+		unlink(conf);
+		rmdir(sub);
+		rmdir(dir);
+		g_free(conf);
+		g_free(sub);
+		g_free(dir);
+	}
 
 	/* JSON strings: quotes, backslash, controls escaped, UTF-8 kept. */
 	{

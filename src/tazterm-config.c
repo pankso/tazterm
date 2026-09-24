@@ -72,8 +72,15 @@ static const char default_conf[] =
 "# exit codes in the status bar), else /bin/sh (busybox ash)\n"
 "shell=" TAZTERM_DEFAULT_SHELL "\n"
 "scrollback_lines=" G_STRINGIFY(TAZTERM_DEFAULT_SCROLLBACK) "\n"
+"# Colors: slitaz | tango | solarized-dark | solarized-light | vte\n"
+"# (VTE's own). foreground= / background= override the theme's.\n"
+"theme=slitaz\n"
 "#foreground=#e6e8ed\n"
 "#background=#1c1e22\n"
+"# Cursor: block | ibeam | underline\n"
+"#cursor_shape=block\n"
+"# Bold text in bright colors (older apps expect it)\n"
+"#bold_is_bright=false\n"
 "#working_directory=/home/user\n"
 "# Terminal editor for Ctrl+click on file:line (default: $VISUAL,\n"
 "# else $EDITOR when it runs in a terminal, else vi)\n"
@@ -95,6 +102,60 @@ static const char default_conf[] =
 "capture_lines=" G_STRINGIFY(TAZTERM_DEFAULT_CAPTURE) "\n"
 "# Mask keys, tokens and passwords in text handed to agents\n"
 "redact=true\n";
+
+/* Color themes: foreground, background, cursor ("" = VTE's), then
+ * the 16 palette colors (8 normal, 8 bright). */
+static const struct {
+	const char *name;
+	const char *colors[19];
+} themes[] = {
+	{ "slitaz", { "#e6e8ed", "#1c1e22", "#d45500",
+	    "#2a2d33", "#cc3e28", "#6aa84f", "#d49a00",
+	    "#4a90d9", "#9b6fbf", "#2aa1b3", "#c8ccd4",
+	    "#5c6370", "#ef5b43", "#8ae234", "#fcd34d",
+	    "#7ab8f5", "#c49be0", "#56d4e6", "#f2f4f8" } },
+	{ "tango", { "#d3d7cf", "#2e3436", "",
+	    "#2e3436", "#cc0000", "#4e9a06", "#c4a000",
+	    "#3465a4", "#75507b", "#06989a", "#d3d7cf",
+	    "#555753", "#ef2929", "#8ae234", "#fce94f",
+	    "#729fcf", "#ad7fa8", "#34e2e2", "#eeeeec" } },
+	{ "solarized-dark", { "#839496", "#002b36", "#93a1a1",
+	    "#073642", "#dc322f", "#859900", "#b58900",
+	    "#268bd2", "#d33682", "#2aa198", "#eee8d5",
+	    "#002b36", "#cb4b16", "#586e75", "#657b83",
+	    "#839496", "#6c71c4", "#93a1a1", "#fdf6e3" } },
+	{ "solarized-light", { "#657b83", "#fdf6e3", "#586e75",
+	    "#073642", "#dc322f", "#859900", "#b58900",
+	    "#268bd2", "#d33682", "#2aa198", "#eee8d5",
+	    "#002b36", "#cb4b16", "#586e75", "#657b83",
+	    "#839496", "#6c71c4", "#93a1a1", "#fdf6e3" } },
+};
+
+/* Theme colors into cfg; FALSE for an unknown name. "vte": nothing. */
+static gboolean
+theme_apply(TaztermConfig *cfg, const char *name)
+{
+	guint i;
+	int c;
+
+	if (!strcmp(name, "vte"))
+		return TRUE;
+	for (i = 0; i < G_N_ELEMENTS(themes); i++) {
+		if (strcmp(themes[i].name, name) != 0)
+			continue;
+		gdk_rgba_parse(&cfg->foreground, themes[i].colors[0]);
+		gdk_rgba_parse(&cfg->background, themes[i].colors[1]);
+		cfg->fg_set = cfg->bg_set = TRUE;
+		cfg->cursor_set = *themes[i].colors[2] &&
+		    gdk_rgba_parse(&cfg->cursor, themes[i].colors[2]);
+		for (c = 0; c < 16; c++)
+			gdk_rgba_parse(&cfg->palette[c],
+			    themes[i].colors[3 + c]);
+		cfg->palette_set = TRUE;
+		return TRUE;
+	}
+	return FALSE;
+}
 
 static void
 config_save_defaults(const char *path)
@@ -132,6 +193,8 @@ tazterm_config_load(void)
 	cfg->status_bar = TRUE;
 	cfg->confirm_close = TRUE;
 	cfg->notify_after = 30;
+	cfg->cursor_shape = -1;
+	cfg->bold_is_bright = -1;
 
 	path = tazterm_config_path();
 	kf = g_key_file_new();
@@ -139,6 +202,7 @@ tazterm_config_load(void)
 		/* No config: create it with defaults. */
 		g_clear_error(&err);
 		config_save_defaults(path);
+		theme_apply(cfg, "slitaz"); /* as in the file just written */
 		g_free(path);
 		g_key_file_free(kf);
 		return cfg;
@@ -183,6 +247,25 @@ tazterm_config_load(void)
 		if (cfg->scrollback > 100000)
 			cfg->scrollback = 100000;
 	}
+
+	/* Theme first: foreground= / background= then override it. */
+	s = g_key_file_get_string(kf, "terminal", "theme", NULL);
+	if (s && *s && !theme_apply(cfg, g_strstrip(s)))
+		g_warning("tazterm: unknown theme '%s'", s);
+	g_free(s);
+
+	s = g_key_file_get_string(kf, "terminal", "cursor_shape", NULL);
+	if (s && !g_strcmp0(g_strstrip(s), "block"))
+		cfg->cursor_shape = VTE_CURSOR_SHAPE_BLOCK;
+	else if (s && !strcmp(s, "ibeam"))
+		cfg->cursor_shape = VTE_CURSOR_SHAPE_IBEAM;
+	else if (s && !strcmp(s, "underline"))
+		cfg->cursor_shape = VTE_CURSOR_SHAPE_UNDERLINE;
+	g_free(s);
+
+	if (g_key_file_has_key(kf, "terminal", "bold_is_bright", NULL))
+		cfg->bold_is_bright = g_key_file_get_boolean(kf, "terminal",
+		    "bold_is_bright", NULL);
 
 	s = g_key_file_get_string(kf, "terminal", "foreground", NULL);
 	if (s && *s && gdk_rgba_parse(&cfg->foreground, s))

@@ -91,6 +91,10 @@ font=Monospace 12
 # auto: bash when installed (command blocks), else /bin/sh
 shell=auto
 scrollback_lines=10000
+# slitaz | tango | solarized-dark | solarized-light | vte
+theme=slitaz
+#cursor_shape=block
+#bold_is_bright=false
 status_bar=true
 confirm_close=true
 # alert when a command this long (seconds) ends out of sight, 0 = never

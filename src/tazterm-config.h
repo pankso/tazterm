@@ -23,6 +23,12 @@ typedef struct {
 	GdkRGBA background;
 	gboolean fg_set;
 	gboolean bg_set;
+	GdkRGBA palette[16];   /* theme colors 0-15 */
+	gboolean palette_set;  /* FALSE: VTE's own palette */
+	GdkRGBA cursor;
+	gboolean cursor_set;
+	int cursor_shape;      /* VteCursorShape, -1 = VTE default */
+	int bold_is_bright;    /* 0 / 1, -1 = VTE default */
 	gboolean status_bar;   /* per-pane status line, default TRUE */
 	gboolean confirm_close; /* ask before killing a running program */
 	int notify_after;      /* alert when a command this long (s) ends

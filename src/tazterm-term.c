@@ -506,7 +506,14 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 	vte_terminal_set_colors(term,
 	    cfg->fg_set ? &cfg->foreground : NULL,
 	    cfg->bg_set ? &cfg->background : NULL,
-	    NULL, 0);
+	    cfg->palette_set ? cfg->palette : NULL,
+	    cfg->palette_set ? 16 : 0);
+	if (cfg->cursor_set)
+		vte_terminal_set_color_cursor(term, &cfg->cursor);
+	if (cfg->cursor_shape >= 0)
+		vte_terminal_set_cursor_shape(term, cfg->cursor_shape);
+	if (cfg->bold_is_bright >= 0)
+		vte_terminal_set_bold_is_bright(term, cfg->bold_is_bright);
 	/* URL first: http://host:8080 must not read as file:line. */
 	match_add(term, url_re, "tazterm-match-url");
 	match_add(term, file_re, "tazterm-match-file");
