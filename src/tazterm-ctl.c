@@ -205,17 +205,9 @@ ctl_read(int caller, int pane, int lines)
 	return g_string_free(out, FALSE);
 }
 
-static gboolean
-on_top_focus_in(GtkWidget *top, GdkEvent *event, gpointer data)
-{
-	(void) event;
-	(void) data;
-	gtk_window_set_urgency_hint(GTK_WINDOW(top), FALSE);
-	return FALSE;
-}
-
 /* An agent wants the user: orange outline on its pane (unless active),
- * urgency hint on the window (unless focused). */
+ * urgency hint on the window (unless focused; the window clears it on
+ * focus-in). */
 static char *
 ctl_notify(int caller, char *note)
 {
@@ -226,16 +218,8 @@ ctl_notify(int caller, char *note)
 	if (t)
 		tazterm_split_attention(ctl_split, t);
 	top = gtk_widget_get_toplevel(ctl_split);
-	if (GTK_IS_WINDOW(top) && !gtk_window_is_active(GTK_WINDOW(top))) {
-		static gboolean hooked = FALSE;
-
-		if (!hooked) {
-			g_signal_connect(top, "focus-in-event",
-			    G_CALLBACK(on_top_focus_in), NULL);
-			hooked = TRUE;
-		}
+	if (GTK_IS_WINDOW(top) && !gtk_window_is_active(GTK_WINDOW(top)))
 		gtk_window_set_urgency_hint(GTK_WINDOW(top), TRUE);
-	}
 	if (tazterm_debug()) {
 		char *cut = g_utf8_substring(note ? note : "", 0,
 		    CTL_MAX_NOTE);

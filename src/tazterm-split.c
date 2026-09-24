@@ -352,9 +352,13 @@ tazterm_split_attention(GtkWidget *split, VteTerminal *term)
 	if (!term || term == SPLIT(split)->active)
 		return;
 	leaf = leaf_of(term);
-	if (leaf)
-		gtk_style_context_add_class(gtk_widget_get_style_context(leaf),
-		    "tazterm-pane-attention");
+	if (!leaf)
+		return;
+	gtk_style_context_add_class(gtk_widget_get_style_context(leaf),
+	    "tazterm-pane-attention");
+	if (tazterm_debug())
+		g_printerr("tazterm: attention pane %d\n",
+		    tazterm_term_get_id(term));
 }
 
 int

@@ -831,6 +831,30 @@ on_pane_focus(VteTerminal *term, gpointer data)
 	}
 }
 
+/* BEL from a pane (an agent asking for permission or done, a build
+ * ending with \a): orange outline when it is not the pane in use,
+ * urgency hint (taskbar) when the window is not focused. */
+static void
+on_bell(VteTerminal *term, gpointer data)
+{
+	TaztermWin *tw = TW(data);
+
+	tazterm_split_attention(tw->split, term);
+	if (!gtk_window_is_active(GTK_WINDOW(tw->win)))
+		gtk_window_set_urgency_hint(GTK_WINDOW(tw->win), TRUE);
+	if (tazterm_debug())
+		g_printerr("tazterm: bell pane %d\n", tazterm_term_get_id(term));
+}
+
+static gboolean
+on_win_focus_in(GtkWidget *widget, GdkEvent *event, gpointer data)
+{
+	(void) event;
+	(void) data;
+	gtk_window_set_urgency_hint(GTK_WINDOW(widget), FALSE);
+	return FALSE;
+}
+
 /* A shell ended: remove its pane (close the window when last). */
 static void
 on_child_exited(VteTerminal *term, int status, gpointer data)
@@ -864,6 +888,7 @@ term_setup(VteTerminal *term, gpointer data)
 	    G_CALLBACK(on_child_exited), tw);
 	g_signal_connect(term, "window-title-changed",
 	    G_CALLBACK(on_title_changed), tw);
+	g_signal_connect(term, "bell", G_CALLBACK(on_bell), tw);
 }
 
 /* --- build -------------------------------------------------------------- */
@@ -900,6 +925,8 @@ tazterm_window_new(TaztermConfig *cfg,
 	g_signal_connect(tw->win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(tw->win, "window-state-event",
 	    G_CALLBACK(on_window_state), tw);
+	g_signal_connect(tw->win, "focus-in-event",
+	    G_CALLBACK(on_win_focus_in), NULL);
 
 	box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_container_add(GTK_CONTAINER(tw->win), box);

@@ -29,6 +29,7 @@ cd src && make && ./tazterm
 - `Ctrl+Shift+O` : diviser empilés
 - `Ctrl+Shift+W` : fermer le panneau courant (dernier → quitte)
 - `Alt+Flèches` : focus au panneau voisin (bordure bleue = actif)
+- Un panneau en arrière-plan qui sonne (BEL : agent qui attend une permission ou a fini, `make; printf '\a'`) prend un contour orange jusqu'à ce qu'on y aille ; fenêtre sans focus → urgence (barre des tâches). Claude Code : `/config` → notifications = `terminal_bell`
 - `Ctrl+Shift+F` : afficher / masquer la recherche (suit le panneau actif)
 - `F11` ou clic droit → `Plein écran` : basculer le plein écran
 - `Ctrl+Shift+A` : ouvrir un split agent IA (agent par défaut)
