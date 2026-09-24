@@ -69,6 +69,9 @@ If TERM_PROGRAM=tazterm, run `tazterm ctl guide` once: it explains how to read t
 | Ctrl+Shift+E / O | Split side by side / stacked |
 | Ctrl+Shift+W / Q | Close pane / window (asks when a program runs) |
 | Alt+Arrows | Move to the neighbor pane |
+| Alt+Shift+Arrows | Move the pane border |
+| Ctrl+Shift+Z | Zoom the pane (again to restore) |
+| Ctrl+Shift+B | Equalize pane sizes |
 | Ctrl+Shift+Up / Down | Previous / next prompt (bash) |
 | Ctrl+Shift+F | Find |
 | Ctrl+Shift+A | Open an agent split |

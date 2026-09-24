@@ -88,6 +88,17 @@ void tazterm_split_close_current(GtkWidget *split);
 /* Move focus to the neighbor pane in the given direction. */
 void tazterm_split_focus_dir(GtkWidget *split, TaztermDirection dir);
 
+/* Pane zoom: the active pane fills the window, the others keep running
+ * hidden; again to restore. Split, close and focus moves restore. */
+void tazterm_split_zoom_pane(GtkWidget *split);
+gboolean tazterm_split_is_zoomed(GtkWidget *split);
+
+/* Move the active pane's border in dir (5% of the divided area). */
+void tazterm_split_resize(GtkWidget *split, TaztermDirection dir);
+
+/* Same size for every pane on each axis, nested splits included. */
+void tazterm_split_equalize(GtkWidget *split);
+
 /* Window-wide zoom: applies to every pane and is inherited by new
  * panes (unlike per-terminal scale). */
 void tazterm_split_zoom_in(GtkWidget *split);

@@ -20,7 +20,10 @@
  *   Ctrl+Shift+T          : paste selection into the agent pane
  *   Ctrl+Shift+S          : copy scrollback (clipboard)
  *   Ctrl+Shift+X          : explain prompt (agent pane + clipboard)
+ *   Ctrl+Shift+Z          : zoom the active pane (again: restore)
+ *   Ctrl+Shift+B          : equalize pane sizes
  *   Alt+Arrows            : focus neighbor pane
+ *   Alt+Shift+Arrows      : move the active pane's border
  * Every terminal action (copy, search, zoom) targets the active pane.
  * The last closed pane quits (via the split's empty hook).
  */
@@ -1023,6 +1026,31 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 		return TRUE;
 	}
 
+	/* Pane borders: Alt+Shift+Arrows. */
+	if (alt && shift && !ctrl) {
+		switch (event->keyval) {
+		case GDK_KEY_Left:
+		case GDK_KEY_KP_Left:
+			tazterm_split_resize(tw->split, TAZTERM_LEFT);
+			return TRUE;
+		case GDK_KEY_Right:
+		case GDK_KEY_KP_Right:
+			tazterm_split_resize(tw->split, TAZTERM_RIGHT);
+			return TRUE;
+		case GDK_KEY_Up:
+		case GDK_KEY_KP_Up:
+			tazterm_split_resize(tw->split, TAZTERM_UP);
+			return TRUE;
+		case GDK_KEY_Down:
+		case GDK_KEY_KP_Down:
+			tazterm_split_resize(tw->split, TAZTERM_DOWN);
+			return TRUE;
+		default:
+			break;
+		}
+		return FALSE;
+	}
+
 	/* Pane navigation. */
 	if (alt && !ctrl) {
 		switch (event->keyval) {
@@ -1096,6 +1124,16 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 		case GDK_KEY_X:
 		case GDK_KEY_x:
 			ai_explain(tw, NULL);
+			return TRUE;
+		case GDK_KEY_Z:
+		case GDK_KEY_z:
+			tazterm_split_zoom_pane(tw->split);
+			if (term)
+				status_update(term);
+			return TRUE;
+		case GDK_KEY_B:
+		case GDK_KEY_b:
+			tazterm_split_equalize(tw->split);
 			return TRUE;
 		case GDK_KEY_Up:
 		case GDK_KEY_Down:
@@ -1230,8 +1268,9 @@ term_is_agent(VteTerminal *term)
 static void
 status_update(VteTerminal *term)
 {
-	GtkWidget *left, *right;
-	gboolean agent, shell;
+	GtkWidget *left, *right, *top;
+	TaztermWin *tw;
+	gboolean agent, shell, zoomed;
 	char *proc, *cwd, *spath, *ltext, *age;
 	const char *shell_path;
 	const char *base;
@@ -1251,10 +1290,15 @@ status_update(VteTerminal *term)
 	proc = exitst ? NULL : tazterm_term_get_process(term);
 	cwd = tazterm_term_get_cwd(term);
 	spath = cwd ? short_path(cwd) : g_strdup("");
-	ltext = g_strdup_printf("%d · %s · %s%s%s",
+	top = gtk_widget_get_toplevel(GTK_WIDGET(term));
+	tw = g_object_get_data(G_OBJECT(top), "tazterm-win");
+	zoomed = tw && tazterm_split_is_zoomed(tw->split) &&
+	    term == tazterm_split_active_term(tw->split);
+	ltext = g_strdup_printf("%d · %s · %s%s%s%s",
 	    tazterm_term_get_id(term),
 	    agent ? _("agent") : shell ? _("shell") : _("command"),
-	    proc ? proc : "-", *spath ? " · " : "", spath);
+	    proc ? proc : "-", *spath ? " · " : "", spath,
+	    zoomed ? " · ⤢" : "");
 	label_set(left, ltext, FALSE);
 
 	idle = now_secs() - GPOINTER_TO_INT(g_object_get_data(G_OBJECT(term),

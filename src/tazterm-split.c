@@ -25,9 +25,12 @@ typedef struct {
 	VteTerminal *active;
 	VteTerminal *prev;  /* previously active pane, weak pointer */
 	gdouble font_scale; /* window-wide zoom, inherited by new panes */
+	GPtrArray *hidden;  /* pane zoom: widgets hidden, NULL when off */
 } Split;
 
 #define SPLIT(w) ((Split *) g_object_get_data(G_OBJECT(w), "tazterm-split"))
+
+static void unzoom(Split *sp);
 
 static void
 split_free(gpointer data)
@@ -37,6 +40,8 @@ split_free(gpointer data)
 	if (sp->prev)
 		g_object_remove_weak_pointer(G_OBJECT(sp->prev),
 		    (gpointer *) &sp->prev);
+	if (sp->hidden)
+		g_ptr_array_free(sp->hidden, TRUE);
 	g_free(sp->shell_override);
 	g_free(sp->workdir_override);
 	g_free(sp);
@@ -445,6 +450,11 @@ tazterm_split_attention(GtkWidget *split, VteTerminal *term)
 		return;
 	gtk_style_context_add_class(gtk_widget_get_style_context(leaf),
 	    "tazterm-pane-attention");
+	/* Hidden by a pane zoom: the visible pane says so instead. */
+	if (SPLIT(split)->hidden && !gtk_widget_is_visible(leaf) &&
+	    leaf_of(SPLIT(split)->active))
+		gtk_style_context_add_class(gtk_widget_get_style_context(
+		    leaf_of(SPLIT(split)->active)), "tazterm-pane-attention");
 	if (tazterm_debug())
 		g_printerr("tazterm: attention pane %d\n",
 		    tazterm_term_get_id(term));
@@ -476,6 +486,7 @@ split_current(GtkWidget *split, GtkOrientation orientation,
 
 	if (!sp->active)
 		return;
+	unzoom(sp);
 	leaf = leaf_of(sp->active);
 	if (!leaf)
 		return;
@@ -572,6 +583,7 @@ tazterm_split_remove_term(GtkWidget *split, VteTerminal *term)
 	leaf = term ? leaf_of(term) : NULL;
 	if (!leaf)
 		return;
+	unzoom(sp);
 	parent = gtk_widget_get_parent(leaf);
 
 	g_object_set_data(G_OBJECT(term), "tazterm-in-tree",
@@ -677,6 +689,7 @@ tazterm_split_focus_dir(GtkWidget *split, TaztermDirection dir)
 
 	if (!sp->active)
 		return;
+	unzoom(sp);
 	toplevel = gtk_widget_get_toplevel(GTK_WIDGET(sp->active));
 	arr = g_ptr_array_new();
 	collect_terms(split, arr);
@@ -744,4 +757,144 @@ tazterm_split_focus_dir(GtkWidget *split, TaztermDirection dir)
 
 	if (best)
 		gtk_widget_grab_focus(best); /* focus-in met a jour active */
+}
+
+/* --- pane zoom, resize, equalize ------------------------------------------ */
+
+/* Zoom: every sibling on the way from the active leaf up to the root
+ * is hidden, so the leaf fills the window. No reparenting: the other
+ * panes keep running untouched, only unmapped. */
+static void
+unzoom(Split *sp)
+{
+	guint i;
+
+	if (!sp->hidden)
+		return;
+	for (i = 0; i < sp->hidden->len; i++)
+		gtk_widget_show(g_ptr_array_index(sp->hidden, i));
+	g_ptr_array_free(sp->hidden, TRUE);
+	sp->hidden = NULL;
+	if (sp->active && leaf_of(sp->active))
+		gtk_style_context_remove_class(gtk_widget_get_style_context(
+		    leaf_of(sp->active)), "tazterm-pane-attention");
+	if (tazterm_debug())
+		g_printerr("tazterm: pane zoom off\n");
+}
+
+void
+tazterm_split_zoom_pane(GtkWidget *split)
+{
+	Split *sp = SPLIT(split);
+	GtkWidget *w, *parent;
+
+	if (sp->hidden) {
+		unzoom(sp);
+		return;
+	}
+	w = sp->active ? leaf_of(sp->active) : NULL;
+	if (!w)
+		return;
+	sp->hidden = g_ptr_array_new_with_free_func(g_object_unref);
+	for (; (parent = gtk_widget_get_parent(w)) && GTK_IS_PANED(parent);
+	    w = parent) {
+		GtkWidget *other = gtk_paned_get_child1(GTK_PANED(parent));
+
+		if (other == w)
+			other = gtk_paned_get_child2(GTK_PANED(parent));
+		if (other) {
+			gtk_widget_hide(other);
+			g_ptr_array_add(sp->hidden, g_object_ref(other));
+		}
+	}
+	if (!sp->hidden->len) {
+		/* Single pane: nothing to zoom. */
+		g_ptr_array_free(sp->hidden, TRUE);
+		sp->hidden = NULL;
+		return;
+	}
+	if (tazterm_debug())
+		g_printerr("tazterm: pane zoom on (%u hidden)\n",
+		    sp->hidden->len);
+}
+
+gboolean
+tazterm_split_is_zoomed(GtkWidget *split)
+{
+	return SPLIT(split)->hidden != NULL;
+}
+
+/* Move the border of the active pane in dir: the closest divider on
+ * that axis, 5% of its paned per step. */
+void
+tazterm_split_resize(GtkWidget *split, TaztermDirection dir)
+{
+	Split *sp = SPLIT(split);
+	GtkOrientation axis;
+	GtkWidget *w, *parent;
+	int size, pos;
+
+	axis = dir == TAZTERM_LEFT || dir == TAZTERM_RIGHT ?
+	    GTK_ORIENTATION_HORIZONTAL : GTK_ORIENTATION_VERTICAL;
+	unzoom(sp);
+	w = sp->active ? leaf_of(sp->active) : NULL;
+	for (; w && (parent = gtk_widget_get_parent(w)) &&
+	    GTK_IS_PANED(parent); w = parent) {
+		if (gtk_orientable_get_orientation(GTK_ORIENTABLE(parent)) !=
+		    axis)
+			continue;
+		size = axis == GTK_ORIENTATION_HORIZONTAL ?
+		    gtk_widget_get_allocated_width(parent) :
+		    gtk_widget_get_allocated_height(parent);
+		pos = gtk_paned_get_position(GTK_PANED(parent));
+		pos += (dir == TAZTERM_LEFT || dir == TAZTERM_UP ? -1 : 1) *
+		    MAX(size / 20, 1);
+		gtk_paned_set_position(GTK_PANED(parent),
+		    CLAMP(pos, size / 10, size - size / 10));
+		return;
+	}
+}
+
+/* Panes along one axis under w: A | (B | C) counts 3 side by side. */
+static int
+axis_count(GtkWidget *w, GtkOrientation axis)
+{
+	if (!GTK_IS_PANED(w) ||
+	    gtk_orientable_get_orientation(GTK_ORIENTABLE(w)) != axis)
+		return 1;
+	return axis_count(gtk_paned_get_child1(GTK_PANED(w)), axis) +
+	    axis_count(gtk_paned_get_child2(GTK_PANED(w)), axis);
+}
+
+static void
+equalize(GtkWidget *w)
+{
+	GtkOrientation axis;
+	int size, n1, n2;
+
+	if (!GTK_IS_PANED(w))
+		return;
+	axis = gtk_orientable_get_orientation(GTK_ORIENTABLE(w));
+	size = axis == GTK_ORIENTATION_HORIZONTAL ?
+	    gtk_widget_get_allocated_width(w) :
+	    gtk_widget_get_allocated_height(w);
+	n1 = axis_count(gtk_paned_get_child1(GTK_PANED(w)), axis);
+	n2 = axis_count(gtk_paned_get_child2(GTK_PANED(w)), axis);
+	if (size > 0)
+		gtk_paned_set_position(GTK_PANED(w), size * n1 / (n1 + n2));
+	equalize(gtk_paned_get_child1(GTK_PANED(w)));
+	equalize(gtk_paned_get_child2(GTK_PANED(w)));
+}
+
+/* Same size for every pane on each axis (nested splits included). */
+void
+tazterm_split_equalize(GtkWidget *split)
+{
+	GList *children, *l;
+
+	unzoom(SPLIT(split));
+	children = gtk_container_get_children(GTK_CONTAINER(split));
+	for (l = children; l; l = l->next)
+		equalize(GTK_WIDGET(l->data));
+	g_list_free(children);
 }
