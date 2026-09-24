@@ -15,6 +15,7 @@ typedef struct {
 	GdkRGBA background;
 	gboolean fg_set;
 	gboolean bg_set;
+	gboolean status_bar;   /* per-pane status line, default TRUE */
 	char *ai_agent;    /* "auto" or opencode|claude|navette */
 	int ai_explain_lines;  /* default 200 */
 	int ai_capture_lines;  /* default 2000 */

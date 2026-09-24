@@ -1,7 +1,8 @@
 /* tazterm-split.c — Binary GtkPaned tree, leaves = terminals.
  *
  * Layout: root GtkBox -> (GtkPaned -> (leaf | paned))*.
- * Leaf = GtkEventBox.class(tazterm-pane[,-focused]) + VteTerminal.
+ * Leaf = GtkEventBox.class(tazterm-pane[,-focused]) -> GtkBox ->
+ *        VteTerminal + optional status bar (see the window).
  * Collapse replaces a single-child paned with its survivor.
  */
 #include "tazterm-split.h"
@@ -50,7 +51,9 @@ css_ensure(void)
 	gtk_css_provider_load_from_data(css,
 	    ".tazterm-pane { outline: 2px solid transparent; outline-offset: -2px; }"
 	    ".tazterm-pane-focused { outline-color: #4a90d9; }"
-	    ".tazterm-pane-attention { outline-color: #f57900; }",
+	    ".tazterm-pane-attention { outline-color: #f57900; }"
+	    ".tazterm-status { background-color: #111317; padding: 1px 6px; }"
+	    ".tazterm-status label { color: #8a919c; font-size: 8pt; }",
 	    -1, NULL);
 	gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),
 	    GTK_STYLE_PROVIDER(css),
@@ -69,6 +72,8 @@ leaf_set_focused(GtkWidget *leaf, gboolean focused)
 	else
 		gtk_style_context_remove_class(ctx, "tazterm-pane-focused");
 }
+
+static GtkWidget *term_leaf(GtkWidget *term);
 
 /* Change the active pane, remembering the old one ("tazterm ctl read"
  * from an agent pane targets the pane the user came from). */
@@ -100,12 +105,12 @@ on_term_focus_in(GtkWidget *term, GdkEventFocus *event, gpointer data)
 	if (sp->active != VTE_TERMINAL(term)) {
 		if (sp->active)
 			leaf_set_focused(
-			    gtk_widget_get_parent(GTK_WIDGET(sp->active)),
+			    term_leaf(GTK_WIDGET(sp->active)),
 			    FALSE);
 		active_set(sp, VTE_TERMINAL(term));
-		leaf_set_focused(gtk_widget_get_parent(term), TRUE);
+		leaf_set_focused(term_leaf(term), TRUE);
 		gtk_style_context_remove_class(gtk_widget_get_style_context(
-		    gtk_widget_get_parent(term)), "tazterm-pane-attention");
+		    term_leaf(term)), "tazterm-pane-attention");
 		if (tazterm_debug())
 			g_printerr("tazterm: focus pane %p\n",
 			    (void *) sp->active);
@@ -116,18 +121,56 @@ on_term_focus_in(GtkWidget *term, GdkEventFocus *event, gpointer data)
 	return FALSE;
 }
 
-/* A terminal's leaf = its direct parent (marked EventBox). */
+/* A terminal's leaf: the EventBox above its box. */
+static GtkWidget *
+term_leaf(GtkWidget *term)
+{
+	GtkWidget *box;
+	GtkWidget *leaf;
+
+	box = gtk_widget_get_parent(term);
+	leaf = box ? gtk_widget_get_parent(box) : NULL;
+	return leaf && GTK_IS_EVENT_BOX(leaf) ? leaf : NULL;
+}
+
+static VteTerminal *
+leaf_term(GtkWidget *leaf)
+{
+	return g_object_get_data(G_OBJECT(leaf), "tazterm-term");
+}
+
+/* Leaf of a terminal still in the tree (NULL once removed). */
 static GtkWidget *
 leaf_of(VteTerminal *term)
 {
-	GtkWidget *leaf;
-
-	leaf = gtk_widget_get_parent(GTK_WIDGET(term));
-	if (!leaf || !GTK_IS_EVENT_BOX(leaf))
-		return NULL;
 	if (!g_object_get_data(G_OBJECT(term), "tazterm-in-tree"))
 		return NULL;
-	return leaf;
+	return term_leaf(GTK_WIDGET(term));
+}
+
+/* One-line bar under the pane; the window fills the two labels
+ * ("tazterm-status-left" / "-right" on the terminal). */
+static GtkWidget *
+status_bar_new(VteTerminal *term)
+{
+	GtkWidget *bar;
+	GtkWidget *left;
+	GtkWidget *right;
+
+	bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+	gtk_style_context_add_class(gtk_widget_get_style_context(bar),
+	    "tazterm-status");
+	left = gtk_label_new(NULL);
+	right = gtk_label_new(NULL);
+	/* Never let a long cwd widen the pane. */
+	gtk_label_set_ellipsize(GTK_LABEL(left), PANGO_ELLIPSIZE_MIDDLE);
+	gtk_label_set_width_chars(GTK_LABEL(left), 1);
+	gtk_label_set_xalign(GTK_LABEL(left), 0.0);
+	gtk_box_pack_start(GTK_BOX(bar), left, TRUE, TRUE, 0);
+	gtk_box_pack_end(GTK_BOX(bar), right, FALSE, FALSE, 0);
+	g_object_set_data(G_OBJECT(term), "tazterm-status-left", left);
+	g_object_set_data(G_OBJECT(term), "tazterm-status-right", right);
+	return bar;
 }
 
 static GtkWidget *
@@ -135,6 +178,7 @@ leaf_new(Split *sp, GtkWidget *split, char **command,
     const char *workdir)
 {
 	GtkWidget *leaf;
+	GtkWidget *box;
 	VteTerminal *term;
 
 	leaf = gtk_event_box_new();
@@ -154,7 +198,13 @@ leaf_new(Split *sp, GtkWidget *split, char **command,
 	if (sp->hooks.term_setup)
 		sp->hooks.term_setup(term, sp->hooks.term_setup_data);
 
-	gtk_container_add(GTK_CONTAINER(leaf), GTK_WIDGET(term));
+	box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+	gtk_box_pack_start(GTK_BOX(box), GTK_WIDGET(term), TRUE, TRUE, 0);
+	if (sp->cfg->status_bar)
+		gtk_box_pack_end(GTK_BOX(box), status_bar_new(term), FALSE,
+		    FALSE, 0);
+	gtk_container_add(GTK_CONTAINER(leaf), box);
+	g_object_set_data(G_OBJECT(leaf), "tazterm-term", term);
 	return leaf;
 }
 
@@ -292,7 +342,7 @@ tazterm_split_new(TaztermConfig *cfg,
 	leaf = leaf_new(sp, sp->root, command, NULL);
 	gtk_box_pack_start(GTK_BOX(sp->root), leaf, TRUE, TRUE, 0);
 
-	sp->active = VTE_TERMINAL(gtk_bin_get_child(GTK_BIN(leaf)));
+	sp->active = leaf_term(leaf);
 	leaf_set_focused(leaf, TRUE);
 
 	if (tazterm_debug())
@@ -437,7 +487,7 @@ split_current(GtkWidget *split, GtkOrientation orientation,
 	/* Balance at half once the allocation is known. */
 	g_idle_add(balance_idle, g_object_ref(paned));
 
-	active_set(sp, VTE_TERMINAL(gtk_bin_get_child(GTK_BIN(newleaf))));
+	active_set(sp, leaf_term(newleaf));
 	leaf_set_focused(leaf, FALSE);
 	leaf_set_focused(newleaf, TRUE);
 	gtk_widget_grab_focus(GTK_WIDGET(sp->active));
@@ -557,8 +607,7 @@ tazterm_split_remove_term(GtkWidget *split, VteTerminal *term)
 	if (focus) {
 		if (sp->active == term)
 			active_set(sp, focus);
-		leaf_set_focused(gtk_widget_get_parent(
-		    GTK_WIDGET(sp->active)), TRUE);
+		leaf_set_focused(term_leaf(GTK_WIDGET(sp->active)), TRUE);
 		gtk_widget_grab_focus(GTK_WIDGET(sp->active));
 		if (sp->hooks.focus_changed)
 			sp->hooks.focus_changed(sp->active,

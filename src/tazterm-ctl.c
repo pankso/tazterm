@@ -28,6 +28,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 
 #include <gio/gunixsocketaddress.h>
 
@@ -125,6 +126,28 @@ pane_role(VteTerminal *t)
 	return "cmd";
 }
 
+/* What an orchestrating agent wants to know: is that pane still busy?
+ * busy (output in the last 2 s), idle Ns, bell (wants the user),
+ * exited N (held pane). State set by the window's status bar code. */
+static char *
+pane_activity(VteTerminal *t)
+{
+	int exitst, last, idle;
+
+	exitst = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(t),
+	    "tazterm-exit"));
+	if (exitst)
+		return g_strdup_printf("exited %d", WIFEXITED(exitst - 1) ?
+		    WEXITSTATUS(exitst - 1) : 128 + WTERMSIG(exitst - 1));
+	if (g_object_get_data(G_OBJECT(t), "tazterm-bell"))
+		return g_strdup("bell");
+	last = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(t),
+	    "tazterm-last-output"));
+	idle = (int) (g_get_monotonic_time() / G_USEC_PER_SEC) - last;
+	return idle < 2 ? g_strdup("busy") : g_strdup_printf("idle %ds",
+	    idle);
+}
+
 static char *
 ctl_ls(int caller)
 {
@@ -135,7 +158,8 @@ ctl_ls(int caller)
 
 	active = tazterm_split_active_term(ctl_split);
 	prev = tazterm_split_previous_term(ctl_split);
-	out = g_string_new("# id\trole\tstate\tprocess\tcwd\ttitle\n");
+	out = g_string_new(
+	    "# id\trole\tstate\tactivity\tprocess\tcwd\ttitle\n");
 	arr = tazterm_split_list(ctl_split);
 	for (i = 0; i < arr->len; i++) {
 		VteTerminal *t = g_ptr_array_index(arr, i);
@@ -144,6 +168,7 @@ ctl_ls(int caller)
 		char *proc = tazterm_term_get_process(t);
 		char *cwd = tazterm_term_get_cwd(t);
 		char *title = g_strdup(vte_terminal_get_window_title(t));
+		char *activity = pane_activity(t);
 
 		if (t == active)
 			g_string_append(state, "active,");
@@ -158,9 +183,10 @@ ctl_ls(int caller)
 		flatten(proc);
 		flatten(cwd);
 		flatten(title);
-		g_string_append_printf(out, "%d\t%s\t%s\t%s\t%s\t%s\n", id,
-		    pane_role(t), state->str, proc ? proc : "-",
+		g_string_append_printf(out, "%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		    id, pane_role(t), state->str, activity, proc ? proc : "-",
 		    cwd ? cwd : "-", title ? title : "");
+		g_free(activity);
 		g_string_free(state, TRUE);
 		g_free(proc);
 		g_free(cwd);
@@ -503,7 +529,8 @@ usage(FILE *f)
 "\n"
 "Read tazterm panes from inside them (agents, scripts). Read-only.\n"
 "\n"
-"  ls                    list panes: id, role, state, process, cwd, title\n"
+"  ls                    list panes: id, role, state, activity (busy,\n"
+"                        idle Ns, bell, exited N), process, cwd, title\n"
 "  read [-p ID] [-n N]   last N lines of a pane (default 200, -a: all).\n"
 "                        Without -p: the active pane, or the pane the\n"
 "                        user came from when called from the active one\n"

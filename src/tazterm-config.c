@@ -52,6 +52,8 @@ static const char default_conf[] =
 "#foreground=#e6e8ed\n"
 "#background=#1c1e22\n"
 "#working_directory=/home/user\n"
+"# One-line status under each pane: process, cwd, agent state\n"
+"status_bar=true\n"
 "\n"
 "[ai]\n"
 "# auto (first found) | opencode | claude | navette\n"
@@ -95,6 +97,7 @@ tazterm_config_load(void)
 	cfg->ai_explain_lines = TAZTERM_DEFAULT_EXPLAIN;
 	cfg->ai_capture_lines = TAZTERM_DEFAULT_CAPTURE;
 	cfg->ai_redact = TRUE;
+	cfg->status_bar = TRUE;
 
 	path = tazterm_config_path();
 	kf = g_key_file_new();
@@ -175,6 +178,10 @@ tazterm_config_load(void)
 		cfg->ai_capture_lines = 10;
 	if (cfg->ai_capture_lines > 100000)
 		cfg->ai_capture_lines = 100000;
+
+	if (g_key_file_has_key(kf, "terminal", "status_bar", NULL))
+		cfg->status_bar = g_key_file_get_boolean(kf, "terminal",
+		    "status_bar", NULL);
 
 	if (g_key_file_has_key(kf, "ai", "redact", NULL))
 		cfg->ai_redact = g_key_file_get_boolean(kf, "ai", "redact",

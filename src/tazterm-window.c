@@ -40,6 +40,7 @@ typedef struct {
 	char **agents;      /* detected on PATH (g_strfreev) */
 	char *agent;        /* default (g_free, NULL if none) */
 	char *title;        /* base title (-T), default "TazTerm" */
+	guint status_timer; /* 1 s status bar refresh */
 	gboolean fullscreen;
 } TaztermWin;
 
@@ -55,6 +56,8 @@ win_free(gpointer data)
 }
 
 #define TW(x) ((TaztermWin *) (x))
+
+static void status_update(VteTerminal *term);
 
 /* Debug aid: SIGUSR1 dumps the active pane's text (headless rendering
  * checks). Registered only when TAZTERM_DEBUG is set. */
@@ -833,12 +836,150 @@ on_pane_focus(VteTerminal *term, gpointer data)
 	const char *text;
 
 	title_update(tw, term);
+	/* The user is here: the bell has been seen. */
+	g_object_set_data(G_OBJECT(term), "tazterm-bell", NULL);
+	status_update(term);
 	/* Open search follows the active pane. */
 	if (search_is_shown(tw)) {
 		text = gtk_entry_get_text(GTK_ENTRY(tw->search_entry));
 		if (text && *text)
 			tazterm_term_search(term, text);
 	}
+}
+
+/* --- status bar --------------------------------------------------------- */
+
+/* Pane state kept as object data on the terminal:
+ *   tazterm-last-output  monotonic seconds of the last screen change
+ *   tazterm-bell         BEL not seen yet by the user
+ *   tazterm-exit         held pane: wait status + 1 */
+#define STATUS_BUSY_SECS 2
+
+static int
+now_secs(void)
+{
+	return (int) (g_get_monotonic_time() / G_USEC_PER_SEC);
+}
+
+static char *
+fmt_age(int secs)
+{
+	if (secs < 60)
+		return g_strdup_printf("%ds", secs);
+	if (secs < 3600)
+		return g_strdup_printf("%dm", secs / 60);
+	return g_strdup_printf("%dh%02d", secs / 3600, secs % 3600 / 60);
+}
+
+/* $HOME -> ~ (the bar is narrow). */
+static char *
+short_path(const char *path)
+{
+	const char *home = g_get_home_dir();
+	gsize n = home ? strlen(home) : 0;
+
+	if (n > 1 && g_str_has_prefix(path, home) &&
+	    (path[n] == '/' || path[n] == '\0'))
+		return g_strconcat("~", path + n, NULL);
+	return g_strdup(path);
+}
+
+static void
+label_set(GtkWidget *label, const char *text, gboolean markup)
+{
+	if (!g_strcmp0(gtk_label_get_label(GTK_LABEL(label)), text))
+		return;
+	if (tazterm_debug())
+		g_printerr("tazterm: status '%s'\n", text);
+	if (markup)
+		gtk_label_set_markup(GTK_LABEL(label), text);
+	else
+		gtk_label_set_text(GTK_LABEL(label), text);
+}
+
+/* Left: "id · role · process · cwd". Right: what the pane is doing,
+ * agents first: working (output flowing) or waiting for the user. */
+static void
+status_update(VteTerminal *term)
+{
+	GtkWidget *left, *right;
+	gboolean agent, shell;
+	char *proc, *cwd, *spath, *ltext, *age;
+	const char *shell_path;
+	const char *base;
+	char *rtext;
+	int idle, exitst;
+
+	left = g_object_get_data(G_OBJECT(term), "tazterm-status-left");
+	right = g_object_get_data(G_OBJECT(term), "tazterm-status-right");
+	if (!left || !right)
+		return;
+	agent = g_object_get_data(G_OBJECT(term), "tazterm-agent") != NULL;
+	shell_path = g_object_get_data(G_OBJECT(term), "tazterm-shell");
+	shell = shell_path != NULL;
+	exitst = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(term),
+	    "tazterm-exit"));
+
+	proc = exitst ? NULL : tazterm_term_get_process(term);
+	cwd = tazterm_term_get_cwd(term);
+	spath = cwd ? short_path(cwd) : g_strdup("");
+	ltext = g_strdup_printf("%d · %s · %s%s%s",
+	    tazterm_term_get_id(term),
+	    agent ? _("agent") : shell ? _("shell") : _("commande"),
+	    proc ? proc : "-", *spath ? " · " : "", spath);
+	label_set(left, ltext, FALSE);
+
+	idle = now_secs() - GPOINTER_TO_INT(g_object_get_data(G_OBJECT(term),
+	    "tazterm-last-output"));
+	age = fmt_age(idle);
+	base = shell_path ? strrchr(shell_path, '/') : NULL;
+	base = base ? base + 1 : shell_path;
+	if (exitst)
+		rtext = WIFEXITED(exitst - 1) ?
+		    g_strdup_printf(_("terminé (code %d)"),
+		    WEXITSTATUS(exitst - 1)) : g_strdup(_("terminé (signal)"));
+	else if (g_object_get_data(G_OBJECT(term), "tazterm-bell"))
+		rtext = g_strdup_printf("<span foreground=\"#f57900\">● %s"
+		    "</span>", _("attend une réponse"));
+	else if (idle < STATUS_BUSY_SECS)
+		rtext = g_strdup_printf("<span foreground=\"#73d216\">● %s"
+		    "</span>", agent ? _("travaille") : _("actif"));
+	else if (agent)
+		rtext = g_strdup_printf(_("en attente · %s"), age);
+	else if (shell && proc && g_strcmp0(proc, base) != 0)
+		rtext = g_strdup_printf(_("silencieux · %s"), age);
+	else
+		rtext = g_strdup("");
+	label_set(right, rtext, TRUE);
+
+	g_free(proc);
+	g_free(cwd);
+	g_free(spath);
+	g_free(ltext);
+	g_free(age);
+	g_free(rtext);
+}
+
+static gboolean
+status_tick(gpointer data)
+{
+	TaztermWin *tw = TW(data);
+	GPtrArray *arr;
+	guint i;
+
+	arr = tazterm_split_list(tw->split);
+	for (i = 0; i < arr->len; i++)
+		status_update(g_ptr_array_index(arr, i));
+	g_ptr_array_free(arr, TRUE);
+	return G_SOURCE_CONTINUE;
+}
+
+static void
+on_contents_changed(VteTerminal *term, gpointer data)
+{
+	(void) data;
+	g_object_set_data(G_OBJECT(term), "tazterm-last-output",
+	    GINT_TO_POINTER(now_secs()));
 }
 
 /* BEL from a pane (an agent asking for permission or done, a build
@@ -850,6 +991,11 @@ on_bell(VteTerminal *term, gpointer data)
 	TaztermWin *tw = TW(data);
 
 	tazterm_split_attention(tw->split, term);
+	if (term != tazterm_split_active_term(tw->split)) {
+		g_object_set_data(G_OBJECT(term), "tazterm-bell",
+		    GINT_TO_POINTER(TRUE));
+		status_update(term);
+	}
 	if (!gtk_window_is_active(GTK_WINDOW(tw->win)))
 		gtk_window_set_urgency_hint(GTK_WINDOW(tw->win), TRUE);
 	if (tazterm_debug())
@@ -885,6 +1031,9 @@ on_child_exited(VteTerminal *term, int status, gpointer data)
 			    WTERMSIG(status));
 		vte_terminal_feed(term, msg, -1);
 		g_free(msg);
+		g_object_set_data(G_OBJECT(term), "tazterm-exit",
+		    GINT_TO_POINTER(status + 1));
+		status_update(term);
 		return;
 	}
 	tazterm_split_remove_term(tw->split, term);
@@ -931,6 +1080,8 @@ term_setup(VteTerminal *term, gpointer data)
 	g_signal_connect(term, "window-title-changed",
 	    G_CALLBACK(on_title_changed), tw);
 	g_signal_connect(term, "bell", G_CALLBACK(on_bell), tw);
+	g_signal_connect(term, "contents-changed",
+	    G_CALLBACK(on_contents_changed), NULL);
 }
 
 /* --- build -------------------------------------------------------------- */
@@ -1006,6 +1157,13 @@ tazterm_window_new(TaztermConfig *cfg, const TaztermWinOpts *opts)
 	if (opts->geometry)
 		geometry_apply(tw, first, opts->geometry);
 	tazterm_ctl_set_split(tw->split);
+
+	if (cfg->status_bar) {
+		tw->status_timer = g_timeout_add_seconds(1, status_tick, tw);
+		g_signal_connect_swapped(tw->win, "destroy",
+		    G_CALLBACK(g_source_remove),
+		    GUINT_TO_POINTER(tw->status_timer));
+	}
 
 	/* State attached to the window, freed on destroy. */
 	g_object_set_data_full(G_OBJECT(tw->win), "tazterm-win", tw, win_free);
