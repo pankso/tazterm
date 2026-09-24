@@ -2,7 +2,7 @@
 
 PACKAGE="tazterm"
 VERSION="0.8"
-CATEGORY="x-window"
+CATEGORY="utilities"
 SHORT_DESC="GTK3/VTE terminal with split panes, made for AI agents."
 MAINTAINER="pankso@slitaz.org"
 LICENSE="BSD"
