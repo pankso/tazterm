@@ -52,8 +52,13 @@ static const char default_conf[] =
 "#foreground=#e6e8ed\n"
 "#background=#1c1e22\n"
 "#working_directory=/home/user\n"
+"# Terminal editor for Ctrl+click on file:line (default: $VISUAL,\n"
+"# else $EDITOR when it runs in a terminal, else vi)\n"
+"#editor=nano\n"
 "# One-line status under each pane: process, cwd, agent state\n"
 "status_bar=true\n"
+"# Ask before closing a pane/window where a program still runs\n"
+"confirm_close=true\n"
 "\n"
 "[ai]\n"
 "# auto (first found) | opencode | claude | navette\n"
@@ -98,6 +103,7 @@ tazterm_config_load(void)
 	cfg->ai_capture_lines = TAZTERM_DEFAULT_CAPTURE;
 	cfg->ai_redact = TRUE;
 	cfg->status_bar = TRUE;
+	cfg->confirm_close = TRUE;
 
 	path = tazterm_config_path();
 	kf = g_key_file_new();
@@ -126,6 +132,12 @@ tazterm_config_load(void)
 	} else {
 		g_free(s);
 	}
+
+	s = g_key_file_get_string(kf, "terminal", "editor", NULL);
+	if (s && *s && !overlong(s, TAZTERM_MAX_PATH))
+		cfg->editor = s;
+	else
+		g_free(s);
 
 	s = g_key_file_get_string(kf, "terminal", "working_directory", NULL);
 	if (s && *s && !overlong(s, TAZTERM_MAX_PATH)) {
@@ -183,6 +195,10 @@ tazterm_config_load(void)
 		cfg->status_bar = g_key_file_get_boolean(kf, "terminal",
 		    "status_bar", NULL);
 
+	if (g_key_file_has_key(kf, "terminal", "confirm_close", NULL))
+		cfg->confirm_close = g_key_file_get_boolean(kf, "terminal",
+		    "confirm_close", NULL);
+
 	if (g_key_file_has_key(kf, "ai", "redact", NULL))
 		cfg->ai_redact = g_key_file_get_boolean(kf, "ai", "redact",
 		    NULL);
@@ -199,6 +215,7 @@ tazterm_config_free(TaztermConfig *cfg)
 	g_free(cfg->font_desc);
 	g_free(cfg->shell);
 	g_free(cfg->workdir);
+	g_free(cfg->editor);
 	g_free(cfg->ai_agent);
 	g_free(cfg);
 }

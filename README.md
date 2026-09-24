@@ -29,6 +29,8 @@ cd src && make && ./tazterm
 - `Ctrl+Shift+O` : diviser empilés
 - `Ctrl+Shift+W` : fermer le panneau courant (dernier → quitte)
 - `Alt+Flèches` : focus au panneau voisin (bordure bleue = actif)
+- `Ctrl+clic` sur une URL : `$BROWSER` (sinon l'application GIO par défaut) ; sur `fichier:ligne[:col]` (gcc, grep -n, traceback, agents) : ouvre l'éditeur dans un split, depuis le dossier du panneau (`[terminal] editor=`, sinon `$VISUAL`, sinon `$EDITOR` s'il tourne en terminal, sinon `vi`)
+- Fermer un panneau (`Ctrl+Shift+W`) ou la fenêtre (`Ctrl+Shift+Q`, bouton du WM) où un programme tourne encore (agent, vim, build) demande confirmation (`[terminal] confirm_close=false` pour désactiver)
 - Barre d'état sous chaque panneau : `id · rôle · processus · dossier` et, à droite, l'activité (● actif / ● travaille pour un agent, en attente · 3m, ● attend une réponse après un BEL, terminé (code N)). `[terminal] status_bar=false` pour la masquer
 - Un panneau en arrière-plan qui sonne (BEL : agent qui attend une permission ou a fini, `make; printf '\a'`) prend un contour orange jusqu'à ce qu'on y aille ; fenêtre sans focus → urgence (barre des tâches). Claude Code : `/config` → notifications = `terminal_bell`
 - `Ctrl+Shift+F` : afficher / masquer la recherche (suit le panneau actif)

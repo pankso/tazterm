@@ -347,6 +347,41 @@ env_integrate_shell(char ***envv, const char *shell)
 	}
 }
 
+/* Ctrl+click targets (see the window): URLs, and file:line[:col] as
+ * printed by compilers, grep -n, tracebacks, agents. VTE 0.56 wants
+ * PCRE2_MULTILINE on match regexes too. */
+static const char url_re[] =
+    "\\b(?:https?|ftp)://[^\\s<>\"'`]*[^\\s<>\"'`.,;:!?)\\]]";
+static const char file_re[] =
+    "(?:/[\\w.+/-]+|(?:\\.{0,2}/)?[\\w.+-]+(?:/[\\w.+-]+)*\\.\\w+)"
+    ":\\d+(?::\\d+)?";
+
+static void
+match_add(VteTerminal *term, const char *pattern, const char *key)
+{
+	VteRegex *re;
+	GError *err = NULL;
+	int tag;
+
+	re = vte_regex_new_for_match(pattern, -1, PCRE2_MULTILINE, &err);
+	if (!re) {
+		g_warning("tazterm: match regex: %s", err->message);
+		g_clear_error(&err);
+		return;
+	}
+	tag = vte_terminal_match_add_regex(term, re, 0);
+	vte_regex_unref(re);
+	vte_terminal_match_set_cursor_name(term, tag, "pointer");
+	g_object_set_data(G_OBJECT(term), key, GINT_TO_POINTER(tag + 1));
+}
+
+gboolean
+tazterm_term_match_is_url(VteTerminal *term, int tag)
+{
+	return GPOINTER_TO_INT(g_object_get_data(G_OBJECT(term),
+	    "tazterm-match-url")) == tag + 1;
+}
+
 static int next_pane_id = 1;
 static char *ctl_socket = NULL;
 
@@ -444,6 +479,9 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 	    cfg->fg_set ? &cfg->foreground : NULL,
 	    cfg->bg_set ? &cfg->background : NULL,
 	    NULL, 0);
+	/* URL first: http://host:8080 must not read as file:line. */
+	match_add(term, url_re, "tazterm-match-url");
+	match_add(term, file_re, "tazterm-match-file");
 
 	if (shell_override && *shell_override) {
 		shell = shell_override;
@@ -479,6 +517,9 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 		workdir = g_get_home_dir();
 	}
 
+	/* Last-resort cwd (command panes report no OSC 7). */
+	g_object_set_data_full(G_OBJECT(term), "tazterm-workdir",
+	    g_strdup(workdir), g_free);
 	if (tazterm_debug())
 		g_printerr("tazterm: spawn argv0='%s'%s cwd='%s'\n", argv[0],
 		    argv[1] ? " (+args)" : "", workdir);
@@ -588,19 +629,37 @@ char *
 tazterm_term_get_text_tail(VteTerminal *term, int n)
 {
 	GtkAdjustment *va;
-	glong col, row, first, start;
+	glong first, last, start;
+	char *text;
 
 	/* Rows are absolute: the scrollback starts at the adjustment's
-	 * lower bound, the cursor row ends the output. Independent of
-	 * where the view is scrolled. */
+	 * lower bound, the screen ends at upper - 1. Not the cursor row:
+	 * a full-screen app (vi, an agent TUI) may park it at the top.
+	 * Blank rows below the output are trimmed. Independent of where
+	 * the view is scrolled. */
 	va = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(term));
 	first = (glong) gtk_adjustment_get_lower(va);
-	vte_terminal_get_cursor_position(term, &col, &row);
-	start = n > 0 ? row - n + 1 : first;
-	if (start < first)
-		start = first;
-	return vte_terminal_get_text_range(term, start, 0, row,
+	last = (glong) gtk_adjustment_get_upper(va) - 1;
+	text = vte_terminal_get_text_range(term, first, 0, last,
 	    vte_terminal_get_column_count(term) - 1, NULL, NULL, NULL);
+	if (!text)
+		return NULL;
+	g_strchomp(text);
+	if (n > 0) {
+		/* Keep the last n non-trailing lines. */
+		const char *p = text + strlen(text);
+		int k = 0;
+
+		while (p > text) {
+			if (*--p == '\n' && ++k == n) {
+				p++;
+				break;
+			}
+		}
+		start = p - text;
+		memmove(text, text + start, strlen(text + start) + 1);
+	}
+	return text;
 }
 
 #define TAZTERM_PASTE_MAX (256 * 1024)
@@ -853,6 +912,32 @@ tazterm_term_get_process(VteTerminal *term)
 	return comm ? g_strstrip(comm) : NULL;
 }
 
+gboolean
+tazterm_term_is_busy(VteTerminal *term, char **what)
+{
+	VtePty *pty;
+	gpointer pid;
+	pid_t fg;
+
+	if (what)
+		*what = NULL;
+	/* Held pane (--hold) whose command already ended. */
+	if (g_object_get_data(G_OBJECT(term), "tazterm-exit"))
+		return FALSE;
+	pty = vte_terminal_get_pty(term);
+	pid = g_object_get_data(G_OBJECT(term), "tazterm-pid");
+	if (!pty || !pid)
+		return FALSE;
+	if (g_object_get_data(G_OBJECT(term), "tazterm-shell")) {
+		fg = tcgetpgrp(vte_pty_get_fd(pty));
+		if (fg <= 0 || fg == (pid_t) GPOINTER_TO_INT(pid))
+			return FALSE;
+	}
+	if (what)
+		*what = tazterm_term_get_process(term);
+	return TRUE;
+}
+
 /* Active shell's cwd. /proc first when readable (cannot be spoofed by
  * OSC 7 from the PTY); OSC 7 next (works when /proc/cwd is blocked). */
 char *
@@ -887,5 +972,10 @@ tazterm_term_get_cwd(VteTerminal *term)
 			return path;
 		g_free(path);
 	}
+	/* Where the pane started: right for most command panes. */
+	path = g_strdup(g_object_get_data(G_OBJECT(term), "tazterm-workdir"));
+	if (path && g_file_test(path, G_FILE_TEST_IS_DIR))
+		return path;
+	g_free(path);
 	return NULL;
 }

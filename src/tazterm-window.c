@@ -42,6 +42,7 @@ typedef struct {
 	char *agent;        /* default (g_free, NULL if none) */
 	char *title;        /* base title (-T), default "TazTerm" */
 	guint status_timer; /* 1 s status bar refresh */
+	GtkWidget *close_dialog; /* pending close confirmation */
 	gboolean fullscreen;
 } TaztermWin;
 
@@ -267,13 +268,127 @@ on_split_h(GtkMenuItem *item, gpointer data)
 	tazterm_split_horizontal(tw->split);
 }
 
+/* --- close confirmation ------------------------------------------------ */
+
+/* Pending close: term is a weak pointer (NULL = close the window). */
+typedef struct {
+	TaztermWin *tw;
+	VteTerminal *term;
+	gboolean window;
+} CloseReq;
+
+static void
+on_close_dialog_destroy(GtkWidget *dialog, gpointer data)
+{
+	CloseReq *req = data;
+
+	(void) dialog;
+	req->tw->close_dialog = NULL;
+	if (req->term)
+		g_object_remove_weak_pointer(G_OBJECT(req->term),
+		    (gpointer *) &req->term);
+	g_free(req);
+}
+
+static void
+on_close_dialog_response(GtkDialog *dialog, int response, gpointer data)
+{
+	CloseReq *req = data;
+	TaztermWin *tw = req->tw;
+	gboolean window = req->window;
+	VteTerminal *term = req->term;
+
+	gtk_widget_destroy(GTK_WIDGET(dialog)); /* frees req */
+	if (response != GTK_RESPONSE_ACCEPT)
+		return;
+	if (window)
+		gtk_widget_destroy(tw->win);
+	else if (term)
+		tazterm_split_remove_term(tw->split, term);
+}
+
+/* Close a pane (term) or the window (term == NULL), asking first when
+ * a program would be killed: an agent at work, an unsaved vim. */
+static void
+close_confirm(TaztermWin *tw, VteTerminal *term)
+{
+	GString *busy;
+	GtkWidget *dialog;
+	CloseReq *req;
+	char *what;
+	GPtrArray *arr;
+	guint i;
+
+	if (tw->close_dialog) {
+		gtk_window_present(GTK_WINDOW(tw->close_dialog));
+		return;
+	}
+	busy = g_string_new(NULL);
+	arr = term ? NULL : tazterm_split_list(tw->split);
+	for (i = 0; term ? i < 1 : i < arr->len; i++) {
+		VteTerminal *t = term ? term : g_ptr_array_index(arr, i);
+
+		if (tw->cfg->confirm_close && tazterm_term_is_busy(t, &what)) {
+			g_string_append_printf(busy, "%s%s", busy->len ? ", " :
+			    "", what ? what : "?");
+			g_free(what);
+		}
+	}
+	if (arr)
+		g_ptr_array_free(arr, TRUE);
+	if (!busy->len) {
+		g_string_free(busy, TRUE);
+		if (term)
+			tazterm_split_remove_term(tw->split, term);
+		else
+			gtk_widget_destroy(tw->win);
+		return;
+	}
+
+	dialog = gtk_message_dialog_new(GTK_WINDOW(tw->win),
+	    GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+	    GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE, "%s",
+	    term ? _("Fermer ce panneau ?") : _("Fermer TazTerm ?"));
+	gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
+	    _("Encore en cours : %s. Il sera arrêté."), busy->str);
+	g_string_free(busy, TRUE);
+	gtk_dialog_add_buttons(GTK_DIALOG(dialog),
+	    _("Annuler"), GTK_RESPONSE_CANCEL,
+	    _("Fermer"), GTK_RESPONSE_ACCEPT, NULL);
+	gtk_dialog_set_default_response(GTK_DIALOG(dialog),
+	    GTK_RESPONSE_CANCEL);
+	req = g_new0(CloseReq, 1);
+	req->tw = tw;
+	req->window = term == NULL;
+	req->term = term;
+	if (term)
+		g_object_add_weak_pointer(G_OBJECT(term),
+		    (gpointer *) &req->term);
+	g_signal_connect(dialog, "response",
+	    G_CALLBACK(on_close_dialog_response), req);
+	g_signal_connect(dialog, "destroy",
+	    G_CALLBACK(on_close_dialog_destroy), req);
+	tw->close_dialog = dialog;
+	gtk_widget_show(dialog);
+}
+
+/* Window manager close button / Alt+F4. */
+static gboolean
+on_delete_event(GtkWidget *widget, GdkEvent *event, gpointer data)
+{
+	(void) widget;
+	(void) event;
+	close_confirm(TW(data), NULL);
+	return TRUE; /* close_confirm destroys the window when it may */
+}
+
 static void
 on_close_pane(GtkMenuItem *item, gpointer data)
 {
 	TaztermWin *tw = TW(data);
 
 	(void) item;
-	tazterm_split_close_current(tw->split);
+	close_confirm(tw, tazterm_split_active_term(tw->split));
 }
 
 static void
@@ -672,10 +787,165 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 	gtk_menu_popup_at_pointer(GTK_MENU(menu), (GdkEvent *) event);
 }
 
+/* --- Ctrl+click: URLs and file:line --------------------------------- */
+
+/* Editors that run inside a terminal (a GUI $EDITOR such as leafpad
+ * would leave an empty pane behind). */
+static gboolean
+editor_in_terminal(const char *cmd)
+{
+	static const char *const known[] = {
+		"vi", "vim", "nvim", "nano", "mcedit", "micro", "ne", "joe",
+		"jed", "mg", "zile", "kak", "hx", "helix", NULL
+	};
+	char **argv = NULL;
+	char *base;
+	gboolean ok = FALSE;
+	int i;
+
+	if (!cmd || !*cmd || !g_shell_parse_argv(cmd, NULL, &argv, NULL))
+		return FALSE;
+	base = g_path_get_basename(argv[0]);
+	for (i = 0; known[i]; i++)
+		if (!strcmp(base, known[i]))
+			ok = TRUE;
+	/* emacs only with -nw */
+	if (!strcmp(base, "emacs") && strstr(cmd, "-nw"))
+		ok = TRUE;
+	g_free(base);
+	g_strfreev(argv);
+	return ok;
+}
+
+static const char *
+editor_cmd(TaztermWin *tw)
+{
+	const char *e;
+
+	if (tw->cfg->editor)
+		return tw->cfg->editor;
+	e = g_getenv("VISUAL");
+	if (e && *e)
+		return e;
+	e = g_getenv("EDITOR");
+	if (editor_in_terminal(e))
+		return e;
+	return "vi";
+}
+
+/* "src/main.c:42:5" -> editor +42 src/main.c in a split, resolved
+ * from the clicked pane's cwd. Only existing regular files. */
+static void
+open_file_match(TaztermWin *tw, VteTerminal *term, const char *match)
+{
+	char **part;
+	char *cwd, *path, *line_arg, *base;
+	char **ed = NULL;
+	GPtrArray *argv;
+	int i;
+
+	part = g_strsplit(match, ":", 3);
+	if (!part[0] || !part[1]) {
+		g_strfreev(part);
+		return;
+	}
+	cwd = tazterm_term_get_cwd(term);
+	if (g_path_is_absolute(part[0]))
+		path = g_strdup(part[0]);
+	else
+		path = g_build_filename(cwd ? cwd : g_get_home_dir(), part[0],
+		    NULL);
+	g_free(cwd);
+	if (!g_file_test(path, G_FILE_TEST_IS_REGULAR) ||
+	    !g_shell_parse_argv(editor_cmd(tw), NULL, &ed, NULL)) {
+		if (tazterm_debug())
+			g_printerr("tazterm: open %s: no such file\n", path);
+		g_free(path);
+		g_strfreev(part);
+		return;
+	}
+	argv = g_ptr_array_new();
+	for (i = 0; ed[i]; i++)
+		g_ptr_array_add(argv, ed[i]);
+	/* busybox vi has no +N; -c N works there and in vim/nvim. */
+	base = g_path_get_basename(ed[0]);
+	if (!strcmp(base, "vi") || !strcmp(base, "vim") ||
+	    !strcmp(base, "nvim")) {
+		g_ptr_array_add(argv, "-c");
+		line_arg = g_strdup(part[1]);
+	} else {
+		line_arg = g_strdup_printf("+%s", part[1]);
+	}
+	g_free(base);
+	g_ptr_array_add(argv, line_arg);
+	g_ptr_array_add(argv, path);
+	g_ptr_array_add(argv, NULL);
+	tazterm_split_vertical_cmd(tw->split, (char **) argv->pdata);
+	if (tazterm_debug())
+		g_printerr("tazterm: open %s +%s with %s\n", path, part[1],
+		    ed[0]);
+	g_ptr_array_free(argv, TRUE);
+	g_strfreev(ed);
+	g_free(line_arg);
+	g_free(path);
+	g_strfreev(part);
+}
+
+/* $BROWSER (SliTaz applications.conf), else GIO's default handler.
+ * Never on a plain click: Ctrl is the user's intent. */
+static void
+open_url_match(const char *url)
+{
+	const char *browser = g_getenv("BROWSER");
+	char **argv = NULL;
+	GError *err = NULL;
+
+	if (browser && *browser &&
+	    g_shell_parse_argv(browser, NULL, &argv, NULL)) {
+		GPtrArray *a = g_ptr_array_new();
+		int i;
+
+		for (i = 0; argv[i]; i++)
+			g_ptr_array_add(a, argv[i]);
+		g_ptr_array_add(a, (gpointer) url);
+		g_ptr_array_add(a, NULL);
+		if (!g_spawn_async(NULL, (char **) a->pdata, NULL,
+		    G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, &err)) {
+			g_warning("tazterm: %s: %s", argv[0], err->message);
+			g_clear_error(&err);
+		}
+		g_ptr_array_free(a, TRUE);
+		g_strfreev(argv);
+		return;
+	}
+	if (!g_app_info_launch_default_for_uri(url, NULL, &err)) {
+		g_warning("tazterm: open %s: %s", url, err->message);
+		g_clear_error(&err);
+	}
+}
+
 static gboolean
 on_button_press(GtkWidget *widget, GdkEventButton *event, gpointer data)
 {
 	TaztermWin *tw = TW(data);
+
+	if (event->type == GDK_BUTTON_PRESS && event->button == 1 &&
+	    (event->state & GDK_CONTROL_MASK)) {
+		int tag = -1;
+		char *m = vte_terminal_match_check_event(VTE_TERMINAL(widget),
+		    (GdkEvent *) event, &tag);
+
+		if (m) {
+			/* The split opens beside the clicked pane. */
+			gtk_widget_grab_focus(widget);
+			if (tazterm_term_match_is_url(VTE_TERMINAL(widget), tag))
+				open_url_match(m);
+			else
+				open_file_match(tw, VTE_TERMINAL(widget), m);
+			g_free(m);
+			return TRUE;
+		}
+	}
 
 	if (event->type == GDK_BUTTON_PRESS && event->button == 3) {
 		gtk_widget_grab_focus(widget);
@@ -774,7 +1044,7 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 			return TRUE;
 		case GDK_KEY_Q:
 		case GDK_KEY_q:
-			gtk_widget_destroy(tw->win);
+			close_confirm(tw, NULL);
 			return TRUE;
 		case GDK_KEY_F:
 		case GDK_KEY_f:
@@ -790,7 +1060,7 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 			return TRUE;
 		case GDK_KEY_W:
 		case GDK_KEY_w:
-			tazterm_split_close_current(tw->split);
+			close_confirm(tw, term);
 			return TRUE;
 		case GDK_KEY_A:
 		case GDK_KEY_a:
@@ -1154,6 +1424,8 @@ tazterm_window_new(TaztermConfig *cfg, const TaztermWinOpts *opts)
 	g_signal_connect(tw->win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(tw->win, "window-state-event",
 	    G_CALLBACK(on_window_state), tw);
+	g_signal_connect(tw->win, "delete-event",
+	    G_CALLBACK(on_delete_event), tw);
 	g_signal_connect(tw->win, "focus-in-event",
 	    G_CALLBACK(on_win_focus_in), NULL);
 

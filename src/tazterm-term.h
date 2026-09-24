@@ -62,6 +62,10 @@ gboolean tazterm_term_paste_text(VteTerminal *term, GdkAtom sel,
  * bracketed paste (busybox ash), where each line would run. */
 void tazterm_term_paste_clipboard(VteTerminal *term);
 
+/* TRUE when a vte_terminal_match_check_event() tag is the URL regex
+ * (else it is file:line[:col]). */
+gboolean tazterm_term_match_is_url(VteTerminal *term, int tag);
+
 /* Pane id (1, 2, ... never reused), exported as TAZTERM_PANE. */
 int tazterm_term_get_id(VteTerminal *term);
 
@@ -69,11 +73,17 @@ int tazterm_term_get_id(VteTerminal *term);
  * unknown. Caller frees (g_free). */
 char *tazterm_term_get_process(VteTerminal *term);
 
+/* Closing term would kill something: a program in the foreground of
+ * its shell, or a command/agent pane still alive. what (may be NULL)
+ * gets the process name (g_free). */
+gboolean tazterm_term_is_busy(VteTerminal *term, char **what);
+
 /* Control socket exported as TAZTERM_SOCKET to panes spawned from now
  * on (NULL: none, and an inherited one is removed). */
 void tazterm_term_set_ctl_socket(const char *path);
 
-/* Active shell's cwd (/proc then OSC 7). Caller frees, NULL if unknown. */
+/* Pane cwd: /proc, then OSC 7, then the directory it started in.
+ * Caller frees, NULL if unknown. */
 char *tazterm_term_get_cwd(VteTerminal *term);
 
 /* Write data to path without following a symlink at path (O_NOFOLLOW,

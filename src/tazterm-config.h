@@ -10,12 +10,14 @@ typedef struct {
 	char *font_desc;   /* e.g. "Monospace 12" */
 	char *shell;       /* default: /bin/sh (BusyBox ash) */
 	char *workdir;     /* NULL = $HOME */
+	char *editor;      /* Ctrl+click file:line, NULL = $VISUAL/$EDITOR */
 	long scrollback;   /* lines, default 10000 */
 	GdkRGBA foreground;
 	GdkRGBA background;
 	gboolean fg_set;
 	gboolean bg_set;
 	gboolean status_bar;   /* per-pane status line, default TRUE */
+	gboolean confirm_close; /* ask before killing a running program */
 	char *ai_agent;    /* "auto" or opencode|claude|navette */
 	int ai_explain_lines;  /* default 200 */
 	int ai_capture_lines;  /* default 2000 */
