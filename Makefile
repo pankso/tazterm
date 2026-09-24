@@ -10,6 +10,10 @@ all:
 	$(MAKE) -C src
 	$(MAKE) -C po
 
+# Tests: Xvfb, headless (see tests/run.sh).
+check: all
+	$(MAKE) -C tests check
+
 install: all
 	$(MAKE) -C src install DESTDIR=$(DESTDIR) PREFIX=$(PREFIX)
 	$(MAKE) -C po install DESTDIR=$(DESTDIR) PREFIX=$(PREFIX)
@@ -35,6 +39,7 @@ uninstall:
 
 clean:
 	$(MAKE) -C src clean
+	$(MAKE) -C tests clean
 	$(MAKE) -C po clean
 
-.PHONY: all install uninstall clean
+.PHONY: all check install uninstall clean

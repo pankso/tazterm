@@ -14,3 +14,5 @@ tools/svg2png
 tools/sizeloop
 debug.png
 /tmp-*.log
+tests/unit
+tests/gui
