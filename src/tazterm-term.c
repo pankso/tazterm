@@ -358,8 +358,16 @@ env_integrate_shell(char ***envv, const char *shell)
 		path = integration_path();
 		*envv = g_environ_setenv(*envv, "ENV", path, TRUE);
 		g_free(path);
-	} else if (tazterm_debug()) {
-		g_printerr("tazterm: keep user ENV=%s\n", old);
+	} else {
+		char *path = integration_path();
+
+		/* ENV inherited from a parent tazterm: still our file,
+		 * keep it up to date. */
+		if (!strcmp(old, path))
+			integration_ensure();
+		else if (tazterm_debug())
+			g_printerr("tazterm: keep user ENV=%s\n", old);
+		g_free(path);
 	}
 }
 
