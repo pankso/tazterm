@@ -241,12 +241,6 @@ tazterm_split_zoom_reset(GtkWidget *split)
 	zoom_apply(split, 1.0);
 }
 
-gdouble
-tazterm_split_get_scale(GtkWidget *split)
-{
-	return SPLIT(split)->font_scale;
-}
-
 /* --- API ---------------------------------------------------------------------- */
 
 GtkWidget *

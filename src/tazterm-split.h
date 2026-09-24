@@ -72,7 +72,6 @@ void tazterm_split_focus_dir(GtkWidget *split, TaztermDirection dir);
 void tazterm_split_zoom_in(GtkWidget *split);
 void tazterm_split_zoom_out(GtkWidget *split);
 void tazterm_split_zoom_reset(GtkWidget *split);
-gdouble tazterm_split_get_scale(GtkWidget *split);
 
 G_END_DECLS
 

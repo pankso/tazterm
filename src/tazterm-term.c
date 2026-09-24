@@ -1,4 +1,4 @@
-/* tazterm-term.c — VteTerminal wrapper: spawn, zoom, search. */
+/* tazterm-term.c — VteTerminal wrapper: spawn, search, capture, paste. */
 #include "tazterm-term.h"
 
 #include <errno.h>
@@ -9,14 +9,11 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include <glib/gi18n.h>
 #include <glib/gstdio.h>
 
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
-
-#define TAZTERM_ZOOM_STEP 0.1
-#define TAZTERM_ZOOM_MIN 0.5
-#define TAZTERM_ZOOM_MAX 3.0
 
 gboolean
 tazterm_debug(void)
@@ -180,15 +177,19 @@ tazterm_term_osc7_emit(void)
  * Encoding is done in C (`tazterm --osc7`): a bashism in PWD would
  * break ash, and a raw PWD inside OSC 7 lets a directory name inject
  * terminal sequences. cd() returns the cd status, not the encoder's.
+ * The guard is NOT exported: an exported guard leaked into every child
+ * and disabled the hook in a tazterm started from a pane (v3 bug).
  */
+#define INTEGRATION_VERSION "tazterm shell integration v4"
+#define INTEGRATION_MARKER "# TAZTERM-CUSTOM-BELOW\n"
+
 static const char integration_sh[] =
-"# tazterm shell integration v3 (managed by tazterm, do not edit above)\n"
+"# " INTEGRATION_VERSION " (managed by tazterm, do not edit above)\n"
 "# ash/dash: sourced via $ENV. Reports cwd with OSC 7 for split panes.\n"
 "# bash is covered by PROMPT_COMMAND (see tazterm) or /etc/profile.d/vte.sh.\n"
-"# Custom code may go BELOW the marker line.\n"
-"if [ -z \"$TAZTERM_OSC7\" ] && [ -n \"$PS1\" ]; then\n"
-"    TAZTERM_OSC7=1\n"
-"    export TAZTERM_OSC7\n"
+"# Custom code may go BELOW the marker line (kept on upgrade).\n"
+"if [ -z \"$__tazterm_hooked\" ] && [ -n \"$PS1\" ]; then\n"
+"    __tazterm_hooked=1\n"
 "    __tazterm_osc7() {\n"
 "        if [ -n \"$TAZTERM_BIN\" ] && [ -x \"$TAZTERM_BIN\" ]; then\n"
 "            \"$TAZTERM_BIN\" --osc7\n"
@@ -201,7 +202,7 @@ static const char integration_sh[] =
 "    }\n"
 "    __tazterm_osc7\n"
 "fi\n"
-"# TAZTERM-CUSTOM-BELOW\n";
+INTEGRATION_MARKER;
 
 static char *
 integration_path(void)
@@ -215,23 +216,34 @@ integration_ensure(void)
 {
 	char *path;
 	char *old = NULL;
+	const char *custom = NULL;
+	char *data;
+	gboolean ok;
 
 	path = integration_path();
-	if (g_file_get_contents(path, &old, NULL, NULL) &&
-	    strstr(old, "tazterm shell integration v3")) {
-		g_free(old);
-		g_free(path);
-		return;
+	if (g_file_get_contents(path, &old, NULL, NULL)) {
+		if (strstr(old, INTEGRATION_VERSION)) {
+			g_free(old);
+			g_free(path);
+			return;
+		}
+		/* Upgrade: keep the user's code below the marker. */
+		custom = strstr(old, INTEGRATION_MARKER);
+		if (custom)
+			custom += strlen(INTEGRATION_MARKER);
 	}
-	g_free(old);
 	{
 		char *dir = g_path_get_dirname(path);
 
 		g_mkdir_with_parents(dir, 0755);
 		g_free(dir);
 	}
+	data = g_strconcat(integration_sh, custom ? custom : "", NULL);
+	g_free(old);
 	/* NOFOLLOW write: never redirect through a planted symlink. */
-	if (!tazterm_write_file_nofollow(path, integration_sh, -1, 0644)) {
+	ok = tazterm_write_file_nofollow(path, data, -1, 0644);
+	g_free(data);
+	if (!ok) {
 		if (tazterm_debug())
 			g_printerr("tazterm: cannot write %s\n", path);
 		g_free(path);
@@ -426,8 +438,15 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 		    argv[1] ? " (+args)" : "", workdir);
 
 	envv = g_get_environ();
-	if (!command || !*command)
+	/* Exported by integration v3: drop it or a nested tazterm skips
+	 * its own hook. */
+	envv = g_environ_unsetenv(envv, "TAZTERM_OSC7");
+	if (!command || !*command) {
 		env_integrate_shell(&envv, shell);
+		/* Shell pane: remembered for the paste safety check. */
+		g_object_set_data_full(G_OBJECT(term), "tazterm-shell",
+		    g_strdup(shell), g_free);
+	}
 
 	vte_terminal_spawn_async(term,
 	    VTE_PTY_DEFAULT,
@@ -443,36 +462,6 @@ tazterm_term_new_cmd(TaztermConfig *cfg,
 	g_strfreev(envv);
 
 	return term;
-}
-
-static void
-zoom_set(VteTerminal *term, gdouble scale)
-{
-	if (scale < TAZTERM_ZOOM_MIN)
-		scale = TAZTERM_ZOOM_MIN;
-	if (scale > TAZTERM_ZOOM_MAX)
-		scale = TAZTERM_ZOOM_MAX;
-	vte_terminal_set_font_scale(term, scale);
-	if (tazterm_debug())
-		g_printerr("tazterm: zoom scale=%.2f\n", scale);
-}
-
-void
-tazterm_term_zoom_in(VteTerminal *term)
-{
-	zoom_set(term, vte_terminal_get_font_scale(term) + TAZTERM_ZOOM_STEP);
-}
-
-void
-tazterm_term_zoom_out(VteTerminal *term)
-{
-	zoom_set(term, vte_terminal_get_font_scale(term) - TAZTERM_ZOOM_STEP);
-}
-
-void
-tazterm_term_zoom_reset(VteTerminal *term)
-{
-	zoom_set(term, 1.0);
 }
 
 #define TAZTERM_SEARCH_MAX 256
@@ -526,115 +515,257 @@ tazterm_term_search_prev(VteTerminal *term)
 char *
 tazterm_term_get_visible_text(VteTerminal *term)
 {
-	/* Whole visible scrollback; callers slice what they need. */
+	/* Visible rows only (VTE 0.56 get_text): debug dump. For captures
+	 * use tazterm_term_get_text_tail(), which reads the scrollback. */
 	return vte_terminal_get_text(term, NULL, FALSE, NULL);
 }
 
 char *
-tazterm_term_get_selected_text(VteTerminal *term)
+tazterm_term_get_text_tail(VteTerminal *term, int n)
 {
-	GtkClipboard *clip;
-	char *text;
+	GtkAdjustment *va;
+	glong col, row, first, start;
 
-	/* VTE 0.56 exposes no direct "selected text" getter. Copy to
-	 * PRIMARY (not CLIPBOARD) and read it back synchronously. */
-	if (!vte_terminal_get_has_selection(term))
-		return NULL;
-	vte_terminal_copy_primary(term);
-	clip = gtk_clipboard_get(GDK_SELECTION_PRIMARY);
-	text = gtk_clipboard_wait_for_text(clip);
-	if (!text || !*text) {
-		g_free(text);
-		return NULL;
-	}
-	return text;
+	/* Rows are absolute: the scrollback starts at the adjustment's
+	 * lower bound, the cursor row ends the output. Independent of
+	 * where the view is scrolled. */
+	va = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(term));
+	first = (glong) gtk_adjustment_get_lower(va);
+	vte_terminal_get_cursor_position(term, &col, &row);
+	start = n > 0 ? row - n + 1 : first;
+	if (start < first)
+		start = first;
+	return vte_terminal_get_text_range(term, start, 0, row,
+	    vte_terminal_get_column_count(term) - 1, NULL, NULL, NULL);
 }
 
 #define TAZTERM_PASTE_MAX (256 * 1024)
 
-/* Keep tab/newline; drop other C0 and DEL (so ^C/^D/ESC cannot hijack
- * the agent). Lone CR becomes newline; CR+LF is one newline. */
-static char *
-paste_sanitize(const char *in, gsize *out_len)
+char *
+tazterm_text_sanitize(const char *in)
 {
+	char *valid;
+	const char *p;
 	GString *gs;
-	const unsigned char *p;
 
+	if (!in || !*in)
+		return NULL;
+	valid = g_utf8_make_valid(in, -1);
 	gs = g_string_new(NULL);
-	for (p = (const unsigned char *) in; *p; p++) {
-		if (*p == '\t' || *p == '\n')
-			g_string_append_c(gs, (char) *p);
-		else if (*p == '\r') {
+	for (p = valid; *p; p = g_utf8_next_char(p)) {
+		gunichar c = g_utf8_get_char(p);
+
+		if (c == '\r') {
 			if (p[1] != '\n')
 				g_string_append_c(gs, '\n');
-		} else if (*p >= 32 && *p != 127)
-			g_string_append_c(gs, (char) *p);
+		} else if (c == '\t' || c == '\n' ||
+		    (c >= 0x20 && c != 0x7f && (c < 0x80 || c > 0x9f))) {
+			g_string_append_unichar(gs, c);
+		}
 	}
-	if (out_len)
-		*out_len = gs->len;
+	g_free(valid);
+	if (gs->len == 0 || gs->len > TAZTERM_PASTE_MAX) {
+		if (tazterm_debug() && gs->len)
+			g_printerr("tazterm: paste too large (%lu bytes)\n",
+			    (unsigned long) gs->len);
+		g_string_free(gs, TRUE);
+		return NULL;
+	}
 	return g_string_free(gs, FALSE);
 }
 
-static gboolean
-feed_sanitized(VteTerminal *term, const char *text, gboolean newline)
+/* Hand clean text to VTE's own paste: VTE maps newlines to CR and adds
+ * bracketed-paste markers only when the application asked for them
+ * (DECSET 2004, invisible to tazterm on VTE 0.56). Forcing the markers
+ * garbled the paste in busybox ash and still ran each line.
+ * VTE re-reads the selection, so the selection is replaced only when
+ * cleaning changed the text: an untouched paste keeps the original
+ * owner (the copied text survives tazterm). Under X11 any client may
+ * serve different data on the second read; X11 clients are trusted
+ * anyway (they can inject keys). */
+static void
+paste_clean(VteTerminal *term, GdkAtom sel, const char *clean,
+    const char *orig)
+{
+	if (g_strcmp0(clean, orig) != 0)
+		gtk_clipboard_set_text(gtk_clipboard_get(sel), clean, -1);
+	if (sel == GDK_SELECTION_PRIMARY)
+		vte_terminal_paste_primary(term);
+	else
+		vte_terminal_paste_clipboard(term);
+}
+
+gboolean
+tazterm_term_paste_text(VteTerminal *term, GdkAtom sel, const char *text)
 {
 	char *clean;
-	gsize len;
-	GString *gs;
 
-	if (!term || !text || !*text)
+	clean = tazterm_text_sanitize(text);
+	if (!clean)
 		return FALSE;
-	clean = paste_sanitize(text, &len);
-	if (!clean || len == 0) {
-		g_free(clean);
-		return FALSE;
-	}
-	if (len > TAZTERM_PASTE_MAX) {
-		if (tazterm_debug())
-			g_printerr("tazterm: paste too large (%lu bytes)\n",
-			    (unsigned long) len);
-		g_free(clean);
-		return FALSE;
-	}
-	gs = g_string_sized_new(len + 16);
-	g_string_append(gs, "\033[200~");
-	g_string_append_len(gs, clean, (gssize) len);
-	g_string_append(gs, "\033[201~");
-	if (newline)
-		g_string_append_c(gs, '\n');
+	paste_clean(term, sel, clean, text);
 	g_free(clean);
-	vte_terminal_feed_child(term, gs->str, (gssize) gs->len);
-	g_string_free(gs, TRUE);
 	return TRUE;
 }
 
-gboolean
-tazterm_term_feed_paste(VteTerminal *term, const char *text)
+/* TRUE when the pane's foreground process is its own shell and that
+ * shell has no bracketed paste (busybox ash, dash): each pasted line
+ * would run at once. bash/zsh/fish hold a multi-line paste in the
+ * editor until Enter. */
+static gboolean
+term_at_raw_prompt(VteTerminal *term)
 {
-	return feed_sanitized(term, text, TRUE);
+	const char *shell;
+	const char *base;
+	gpointer pid;
+	VtePty *pty;
+	pid_t fg;
+
+	shell = g_object_get_data(G_OBJECT(term), "tazterm-shell");
+	pid = g_object_get_data(G_OBJECT(term), "tazterm-pid");
+	pty = vte_terminal_get_pty(term);
+	if (!shell || !pid || !pty)
+		return FALSE;
+	/* Unknown foreground (error): assume the prompt, stay safe. */
+	fg = tcgetpgrp(vte_pty_get_fd(pty));
+	if (fg >= 0 && fg != (pid_t) GPOINTER_TO_INT(pid))
+		return FALSE;
+	base = strrchr(shell, '/');
+	base = base ? base + 1 : shell;
+	return !(strstr(base, "bash") || !strcmp(base, "zsh") ||
+	    !strcmp(base, "fish"));
 }
 
-/* Manual paste (keyboard/menu): same sanitizer as send-to-agent
- * (C0 stripped, bracketed) but WITHOUT the trailing newline, so
- * pasting never executes by itself. */
-gboolean
+/* Pending clipboard paste. term is a weak pointer: the pane may die
+ * while the clipboard answers or the dialog is open. */
+typedef struct {
+	VteTerminal *term;
+	char *orig;
+	char *clean;
+} PasteReq;
+
+static void
+paste_req_free(PasteReq *req)
+{
+	if (req->term)
+		g_object_remove_weak_pointer(G_OBJECT(req->term),
+		    (gpointer *) &req->term);
+	g_free(req->orig);
+	g_free(req->clean);
+	g_free(req);
+}
+
+static void
+on_paste_confirm_destroy(GtkWidget *dialog, gpointer data)
+{
+	(void) dialog;
+	paste_req_free(data);
+}
+
+static void
+on_paste_confirm(GtkDialog *dialog, int response, gpointer data)
+{
+	PasteReq *req = data;
+
+	if (response == GTK_RESPONSE_ACCEPT && req->term)
+		paste_clean(req->term, GDK_SELECTION_CLIPBOARD, req->clean,
+		    req->orig);
+	gtk_widget_destroy(GTK_WIDGET(dialog)); /* frees req */
+}
+
+#define TAZTERM_PREVIEW_LINES 8
+#define TAZTERM_PREVIEW_CHARS 80
+
+/* Ask before a multi-line paste reaches a raw prompt. Non-blocking
+ * (no gtk_dialog_run: a nested main loop may free the pane). */
+static void
+paste_confirm(PasteReq *req)
+{
+	GtkWidget *top;
+	GtkWidget *dialog;
+	GString *preview;
+	char **lines;
+	guint n, i;
+
+	lines = g_strsplit(req->clean, "\n", -1);
+	n = g_strv_length(lines);
+	if (n > 1 && !*lines[n - 1])
+		n--; /* trailing newline: no extra line */
+	preview = g_string_new(NULL);
+	for (i = 0; i < n && i < TAZTERM_PREVIEW_LINES; i++) {
+		char *cut = g_utf8_substring(lines[i], 0,
+		    TAZTERM_PREVIEW_CHARS);
+
+		g_string_append_printf(preview, "%s%s\n", cut,
+		    g_utf8_strlen(lines[i], -1) > TAZTERM_PREVIEW_CHARS ?
+		    "…" : "");
+		g_free(cut);
+	}
+	if (n > TAZTERM_PREVIEW_LINES)
+		g_string_append(preview, "…\n");
+	g_strfreev(lines);
+
+	top = gtk_widget_get_toplevel(GTK_WIDGET(req->term));
+	dialog = gtk_message_dialog_new(
+	    gtk_widget_is_toplevel(top) ? GTK_WINDOW(top) : NULL,
+	    GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+	    GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE,
+	    _("Coller %u lignes dans le shell ?"), n);
+	gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
+	    "%s\n\n%s",
+	    _("Ce shell exécute chaque ligne dès qu'elle est collée."),
+	    preview->str);
+	g_string_free(preview, TRUE);
+	gtk_dialog_add_buttons(GTK_DIALOG(dialog),
+	    _("Annuler"), GTK_RESPONSE_CANCEL,
+	    _("Coller"), GTK_RESPONSE_ACCEPT, NULL);
+	gtk_dialog_set_default_response(GTK_DIALOG(dialog),
+	    GTK_RESPONSE_CANCEL);
+	g_signal_connect(dialog, "response", G_CALLBACK(on_paste_confirm),
+	    req);
+	g_signal_connect(dialog, "destroy",
+	    G_CALLBACK(on_paste_confirm_destroy), req);
+	gtk_widget_show(dialog);
+	if (tazterm_debug())
+		g_printerr("tazterm: paste: confirm %u lines\n", n);
+}
+
+static void
+on_clipboard_text(GtkClipboard *clip, const char *text, gpointer data)
+{
+	PasteReq *req = data;
+
+	(void) clip;
+	if (!req->term)
+		goto out;
+	req->clean = tazterm_text_sanitize(text);
+	if (!req->clean)
+		goto out;
+	req->orig = g_strdup(text);
+	if (strchr(req->clean, '\n') && term_at_raw_prompt(req->term)) {
+		paste_confirm(req); /* owns req now */
+		return;
+	}
+	paste_clean(req->term, GDK_SELECTION_CLIPBOARD, req->clean,
+	    req->orig);
+out:
+	paste_req_free(req);
+}
+
+void
 tazterm_term_paste_clipboard(VteTerminal *term)
 {
-	GtkClipboard *clip;
-	char *text;
-	gboolean ok;
+	PasteReq *req;
 
 	if (!term)
-		return FALSE;
-	clip = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
-	text = gtk_clipboard_wait_for_text(clip);
-	if (!text || !*text) {
-		g_free(text);
-		return FALSE;
-	}
-	ok = feed_sanitized(term, text, FALSE);
-	g_free(text);
-	return ok;
+		return;
+	/* Async read: gtk_clipboard_wait_for_text() spins a nested main
+	 * loop where child-exited may destroy the pane under us. */
+	req = g_new0(PasteReq, 1);
+	req->term = term;
+	g_object_add_weak_pointer(G_OBJECT(term), (gpointer *) &req->term);
+	gtk_clipboard_request_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD),
+	    on_clipboard_text, req);
 }
 
 /* Active shell's cwd. /proc first when readable (cannot be spoofed by

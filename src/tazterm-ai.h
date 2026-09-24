@@ -2,8 +2,9 @@
  *
  * Agents (opencode, claude, navette) are ordinary CLI/TUI programs:
  * TazTerm detects them on PATH, opens a dedicated split that spawns
- * the launch command, and captures VTE scrollback (raw pty text) for
- * the agent via clipboard + /tmp file. No agent-side change needed.
+ * the launch command, and hands VTE scrollback (raw pty text) to the
+ * agent pane or the clipboard. Nothing is written to disk.
+ * No agent-side change needed.
  */
 #ifndef TAZTERM_AI_H
 #define TAZTERM_AI_H
@@ -25,22 +26,13 @@ char **tazterm_ai_detect(const char *cfg_agent, char **def_out);
  * TAZTERM_AGENT_CMD). Returns a static string. */
 const char *tazterm_ai_launch_cmd(const char *agent);
 
-/* Last n lines of scrollback (raw text). Free it (g_free).
- * n <= 0: everything. */
+/* Last n lines of output, scrollback included (raw text, trailing
+ * blanks trimmed). n <= 0: everything. Free it (g_free). */
 char *tazterm_ai_last_lines(VteTerminal *term, int n);
 
-/* TRUE when the text looks like an error (for "explain"). */
-gboolean tazterm_ai_looks_like_error(const char *text);
-
-/* Copy text -> clipboard + /tmp/tazterm-<prefix>-<pid>.log file.
- * Returns the file path (free it), or NULL on failure. */
-char *tazterm_ai_save_capture(GtkWidget *win, const char *text,
-    const char *prefix);
-
-/* Build the "explain this error" prompt (markdown) from the last
- * n lines, save it (prefix "explain") + clipboard.
- * Returns the path (free it), or NULL with no text. */
-char *tazterm_ai_explain(GtkWidget *win, VteTerminal *term, int nlines);
+/* "Explain" prompt (markdown) around the last n lines of term, framed
+ * as untrusted data for the agent. Free it (g_free). */
+char *tazterm_ai_explain_prompt(VteTerminal *term, int nlines);
 
 G_END_DECLS
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tazterm\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-17 02:59+0200\n"
+"POT-Creation-Date: 2026-09-24 04:58+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: SliTaz Contributors\n"
 "Language-Team: French\n"
@@ -17,93 +17,105 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-
-#: src/tazterm-window.c:394
+#: src/tazterm-window.c:564
 msgid "Copier"
 msgstr "Copier"
 
-#: src/tazterm-window.c:395
+#: src/tazterm-window.c:565 src/tazterm-term.c:721
 msgid "Coller"
 msgstr "Coller"
 
-#: src/tazterm-window.c:396
+#: src/tazterm-window.c:566
 msgid "Tout sélectionner"
 msgstr "Tout sélectionner"
 
-#: src/tazterm-window.c:400
+#: src/tazterm-window.c:570
 msgid "Rechercher…"
 msgstr "Rechercher…"
 
-#: src/tazterm-window.c:403
+#: src/tazterm-window.c:573
 msgid "Diviser côté à côté"
 msgstr "Diviser côté à côté"
 
-#: src/tazterm-window.c:405
+#: src/tazterm-window.c:575
 msgid "Diviser empilés"
 msgstr "Diviser empilés"
 
-#: src/tazterm-window.c:406
+#: src/tazterm-window.c:576
 msgid "Fermer ce panneau"
 msgstr "Fermer ce panneau"
 
-#: src/tazterm-window.c:416
+#: src/tazterm-window.c:586
 #, c-format
 msgid "Ouvrir un split agent (%s)"
 msgstr "Ouvrir un split agent (%s)"
 
-#: src/tazterm-window.c:427
+#: src/tazterm-window.c:597
 #, c-format
 msgid "Split agent : %s"
 msgstr "Split agent : %s"
 
-#: src/tazterm-window.c:435
+#: src/tazterm-window.c:605
 msgid "Copier le scrollback"
 msgstr "Copier le scrollback"
 
-#: src/tazterm-window.c:437
+#: src/tazterm-window.c:607
 msgid "Expliquer la dernière erreur"
 msgstr "Expliquer la dernière erreur"
 
-#: src/tazterm-window.c:545
+#: src/tazterm-window.c:621
 msgid "Envoyer à l'agent"
 msgstr "Envoyer à l'agent"
 
-#: src/tazterm-window.c:441
+#: src/tazterm-window.c:631
 msgid "Zoom avant"
 msgstr "Zoom avant"
 
-#: src/tazterm-window.c:442
+#: src/tazterm-window.c:632
 msgid "Zoom arrière"
 msgstr "Zoom arrière"
 
-#: src/tazterm-window.c:443
+#: src/tazterm-window.c:633
 msgid "Taille normale"
 msgstr "Taille normale"
 
-#: src/tazterm-window.c:450
+#: src/tazterm-window.c:640
 msgid "Plein écran"
 msgstr "Plein écran"
 
-#: src/main.c:34
+#: src/main.c:36
 msgid "Dossier de demarrage du shell"
 msgstr "Dossier de demarrage du shell"
 
-#: src/main.c:35
+#: src/main.c:37
 msgid "DOSSIER"
 msgstr "DOSSIER"
 
-#: src/main.c:37
+#: src/main.c:39
 msgid "Shell a lancer (defaut : /bin/sh)"
 msgstr "Shell a lancer (defaut : /bin/sh)"
 
-#: src/main.c:38
+#: src/main.c:40
 msgid "SHELL"
 msgstr "SHELL"
 
-#: src/main.c:40
+#: src/main.c:42
 msgid "Afficher la version"
 msgstr "Afficher la version"
 
-#: src/main.c:53
+#: src/main.c:59
 msgid "- terminal leger GTK3/VTE"
 msgstr "- terminal leger GTK3/VTE"
+
+#: src/tazterm-term.c:713
+#, c-format
+msgid "Coller %u lignes dans le shell ?"
+msgstr "Coller %u lignes dans le shell ?"
+
+#: src/tazterm-term.c:716
+msgid "Ce shell exécute chaque ligne dès qu'elle est collée."
+msgstr "Ce shell exécute chaque ligne dès qu'elle est collée."
+
+#: src/tazterm-term.c:720
+msgid "Annuler"
+msgstr "Annuler"

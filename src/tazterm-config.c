@@ -19,6 +19,8 @@
 #define TAZTERM_DEFAULT_FONT "Monospace 12"
 #define TAZTERM_DEFAULT_SHELL "/bin/sh"
 #define TAZTERM_DEFAULT_SCROLLBACK 10000
+#define TAZTERM_DEFAULT_EXPLAIN 200
+#define TAZTERM_DEFAULT_CAPTURE 2000
 
 /* Config values come from a user-writable file: cap lengths so a
  * bloated entry cannot balloon memory. Over-long = rejected
@@ -40,36 +42,35 @@ tazterm_config_path(void)
 	    "tazterm.conf", NULL);
 }
 
-static void
-config_save_defaults(const char *path, TaztermConfig *cfg)
-{
-	GKeyFile *kf;
-	char *data;
-	gsize len;
-	char *dir;
+/* Every key, so the user can discover them; optional ones commented. */
+static const char default_conf[] =
+"# TazTerm configuration (created with defaults).\n"
+"[terminal]\n"
+"font=" TAZTERM_DEFAULT_FONT "\n"
+"shell=" TAZTERM_DEFAULT_SHELL "\n"
+"scrollback_lines=" G_STRINGIFY(TAZTERM_DEFAULT_SCROLLBACK) "\n"
+"#foreground=#e6e8ed\n"
+"#background=#1c1e22\n"
+"#working_directory=/home/user\n"
+"\n"
+"[ai]\n"
+"# auto (first found) | opencode | claude | navette\n"
+"agent=auto\n"
+"# Lines sent by \"explain\" / copied by \"copy scrollback\"\n"
+"explain_lines=" G_STRINGIFY(TAZTERM_DEFAULT_EXPLAIN) "\n"
+"capture_lines=" G_STRINGIFY(TAZTERM_DEFAULT_CAPTURE) "\n";
 
-	kf = g_key_file_new();
-	g_key_file_set_string(kf, "terminal", "font", cfg->font_desc);
-	g_key_file_set_string(kf, "terminal", "shell", cfg->shell);
-	g_key_file_set_integer(kf, "terminal", "scrollback_lines",
-	    (gint) cfg->scrollback);
-	if (cfg->workdir)
-		g_key_file_set_string(kf, "terminal", "working_directory",
-		    cfg->workdir);
+static void
+config_save_defaults(const char *path)
+{
+	char *dir;
 
 	dir = g_path_get_dirname(path);
 	g_mkdir_with_parents(dir, 0755);
 	g_free(dir);
-
-	data = g_key_file_to_data(kf, &len, NULL);
-	if (data) {
-		/* Fresh file in the user's own config dir; NOFOLLOW so a
-		 * planted symlink cannot redirect the write elsewhere. */
-		tazterm_write_file_nofollow(path, data, (gssize) len,
-		    0644);
-		g_free(data);
-	}
-	g_key_file_free(kf);
+	/* Fresh file in the user's own config dir; NOFOLLOW so a
+	 * planted symlink cannot redirect the write elsewhere. */
+	tazterm_write_file_nofollow(path, default_conf, -1, 0644);
 }
 
 TaztermConfig *
@@ -89,15 +90,15 @@ tazterm_config_load(void)
 	cfg->fg_set = FALSE;
 	cfg->bg_set = FALSE;
 	cfg->ai_agent = g_strdup("auto");
-	cfg->ai_explain_lines = 200;
-	cfg->ai_capture_lines = 2000;
+	cfg->ai_explain_lines = TAZTERM_DEFAULT_EXPLAIN;
+	cfg->ai_capture_lines = TAZTERM_DEFAULT_CAPTURE;
 
 	path = tazterm_config_path();
 	kf = g_key_file_new();
 	if (!g_key_file_load_from_file(kf, path, G_KEY_FILE_NONE, &err)) {
 		/* No config: create it with defaults. */
 		g_clear_error(&err);
-		config_save_defaults(path, cfg);
+		config_save_defaults(path);
 		g_free(path);
 		g_key_file_free(kf);
 		return cfg;

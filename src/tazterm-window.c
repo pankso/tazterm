@@ -10,9 +10,9 @@
  *   Ctrl+Shift+O          : split stacked (vertical paned)
  *   Ctrl+Shift+W          : close current pane
  *   Ctrl+Shift+A          : open an agent split (active pane)
- *   Ctrl+Shift+T          : send selection to the agent pane
- *   Ctrl+Shift+S          : copy scrollback (clipboard + /tmp)
- *   Ctrl+Shift+X          : explain last error (/tmp + clipboard)
+ *   Ctrl+Shift+T          : paste selection into the agent pane
+ *   Ctrl+Shift+S          : copy scrollback (clipboard)
+ *   Ctrl+Shift+X          : explain prompt (agent pane + clipboard)
  *   Alt+Arrows            : focus neighbor pane
  * Every terminal action (copy, search, zoom) targets the active pane.
  * The last closed pane quits (via the split's empty hook).
@@ -194,8 +194,8 @@ static void
 on_paste(GtkMenuItem *item, gpointer data)
 {
 	(void) item;
-	/* Sanitized + bracketed, no trailing newline: a hostile
-	 * clipboard can neither inject escapes nor auto-execute. */
+	/* Sanitized, bracketed when the app asks, confirmed before a
+	 * multi-line paste into a raw shell prompt (see term.c). */
 	tazterm_term_paste_clipboard(VTE_TERMINAL(data));
 }
 
@@ -330,40 +330,49 @@ ai_agent_split(TaztermWin *tw, const char *agent)
 		    agent);
 }
 
+/* Clipboard only: scrollback may hold secrets, never written to disk. */
 static void
 ai_copy_scrollback(TaztermWin *tw)
 {
 	VteTerminal *term;
 	char *text;
-	char *path;
 
 	term = tazterm_split_active_term(tw->split);
 	if (!term)
 		return;
 	text = tazterm_ai_last_lines(term, tw->cfg->ai_capture_lines);
-	path = tazterm_ai_save_capture(tw->win, text, "capture");
+	gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD),
+	    text, -1);
 	if (tazterm_debug())
-		g_printerr("tazterm: scrollback copy -> %s\n",
-		    path ? path : "(failed)");
+		g_printerr("tazterm: scrollback copy (%lu bytes)\n",
+		    (unsigned long) strlen(text));
 	g_free(text);
-	g_free(path);
 }
 
+/* Prompt to the clipboard, and pasted into the agent pane when there
+ * is one (no Enter: the user reviews, adds a question, submits). */
 static void
 ai_explain(TaztermWin *tw)
 {
 	VteTerminal *term;
-	char *path;
+	VteTerminal *agent;
+	char *prompt;
 
 	term = tazterm_split_active_term(tw->split);
 	if (!term)
 		return;
-	path = tazterm_ai_explain(tw->win, term,
-	    tw->cfg->ai_explain_lines);
+	prompt = tazterm_ai_explain_prompt(term, tw->cfg->ai_explain_lines);
+	gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD),
+	    prompt, -1);
+	agent = tazterm_split_find_agent(tw->split);
+	if (agent && agent != term &&
+	    tazterm_term_paste_text(agent, GDK_SELECTION_CLIPBOARD, prompt))
+		gtk_widget_grab_focus(GTK_WIDGET(agent));
 	if (tazterm_debug())
-		g_printerr("tazterm: explain -> %s\n",
-		    path ? path : "(failed)");
-	g_free(path);
+		g_printerr("tazterm: explain (%lu bytes) -> %s\n",
+		    (unsigned long) strlen(prompt),
+		    agent && agent != term ? "agent" : "clipboard");
+	g_free(prompt);
 }
 
 static void
@@ -412,14 +421,54 @@ on_explain(GtkMenuItem *item, gpointer data)
 	ai_explain(TW(data));
 }
 
-/* Feed the source pane's selection to the agent as one bracketed paste
- * (C0 stripped, one trailing newline), then focus the agent.
+/* Pending send: win is a weak pointer (the window may close while
+ * PRIMARY answers). */
+typedef struct {
+	GtkWidget *win;
+} SelReq;
+
+static void
+on_selection_for_agent(GtkClipboard *clip, const char *text, gpointer data)
+{
+	SelReq *req = data;
+	TaztermWin *tw;
+	VteTerminal *agent;
+
+	(void) clip;
+	if (!req->win)
+		goto out;
+	tw = g_object_get_data(G_OBJECT(req->win), "tazterm-win");
+	/* Looked up after the wait: the agent pane may be gone. */
+	agent = tw ? tazterm_split_find_agent(tw->split) : NULL;
+	if (!agent) {
+		if (tazterm_debug())
+			g_printerr("tazterm: send to agent: agent gone\n");
+		goto out;
+	}
+	if (!tazterm_term_paste_text(agent, GDK_SELECTION_PRIMARY, text)) {
+		if (tazterm_debug())
+			g_printerr("tazterm: send to agent: paste refused\n");
+		goto out;
+	}
+	gtk_widget_grab_focus(GTK_WIDGET(agent));
+	if (tazterm_debug())
+		g_printerr("tazterm: sent %lu bytes to agent\n",
+		    (unsigned long) strlen(text));
+out:
+	if (req->win)
+		g_object_remove_weak_pointer(G_OBJECT(req->win),
+		    (gpointer *) &req->win);
+	g_free(req);
+}
+
+/* Paste the source pane's selection into the agent pane (sanitized,
+ * no Enter: the user adds a question and submits), then focus it.
  * No agent pane, no selection, or source IS the agent: do nothing. */
 static void
 ai_send_to_agent(TaztermWin *tw, VteTerminal *src)
 {
 	VteTerminal *agent;
-	char *text;
+	SelReq *req;
 
 	if (!src)
 		src = tazterm_split_active_term(tw->split);
@@ -436,24 +485,20 @@ ai_send_to_agent(TaztermWin *tw, VteTerminal *src)
 			g_printerr("tazterm: send to agent: source is agent\n");
 		return;
 	}
-	text = tazterm_term_get_selected_text(src);
-	if (!text) {
+	if (!vte_terminal_get_has_selection(src)) {
 		if (tazterm_debug())
 			g_printerr(
 			    "tazterm: send to agent without selection\n");
 		return;
 	}
-	if (!tazterm_term_feed_paste(agent, text)) {
-		if (tazterm_debug())
-			g_printerr("tazterm: send to agent: paste refused\n");
-		g_free(text);
-		return;
-	}
-	gtk_widget_grab_focus(GTK_WIDGET(agent));
-	if (tazterm_debug())
-		g_printerr("tazterm: sent %lu bytes to agent\n",
-		    (unsigned long) strlen(text));
-	g_free(text);
+	/* VTE 0.56 has no selected-text getter: the selection goes
+	 * through PRIMARY (CLIPBOARD untouched), read asynchronously. */
+	vte_terminal_copy_primary(src);
+	req = g_new0(SelReq, 1);
+	req->win = tw->win;
+	g_object_add_weak_pointer(G_OBJECT(req->win), (gpointer *) &req->win);
+	gtk_clipboard_request_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY),
+	    on_selection_for_agent, req);
 }
 
 /* "Send to agent" request (clicked source pane); freed with the menu. */

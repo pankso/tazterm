@@ -58,7 +58,9 @@ main(int argc, char *argv[])
 
 	ctx = g_option_context_new(_("- terminal leger GTK3/VTE"));
 	g_option_context_add_main_entries(ctx, entries, GETTEXT_PACKAGE);
-	g_option_context_add_group(ctx, gtk_get_option_group(TRUE));
+	/* FALSE: no display needed to parse (-v works over SSH);
+	 * gtk_init_check() opens it below. */
+	g_option_context_add_group(ctx, gtk_get_option_group(FALSE));
 	if (!g_option_context_parse(ctx, &argc, &argv, &err)) {
 		g_printerr("tazterm: %s\n", err->message);
 		g_clear_error(&err);
@@ -68,12 +70,21 @@ main(int argc, char *argv[])
 	g_option_context_free(ctx);
 
 	if (opt_version) {
-		g_print("tazterm %s (gtk %d.%d.%d, vte %s)\n", TAZTERM_VERSION,
+		g_print("tazterm %s (gtk %d.%d.%d, vte %u.%u.%u)\n",
+		    TAZTERM_VERSION,
 		    gtk_get_major_version(), gtk_get_minor_version(),
-		    gtk_get_micro_version(), "2.91");
+		    gtk_get_micro_version(), vte_get_major_version(),
+		    vte_get_minor_version(), vte_get_micro_version());
 		g_free(opt_workdir);
 		g_free(opt_shell);
 		return 0;
+	}
+
+	if (!gtk_init_check(&argc, &argv)) {
+		g_printerr("tazterm: cannot open display\n");
+		g_free(opt_workdir);
+		g_free(opt_shell);
+		return 1;
 	}
 
 	cfg = tazterm_config_load();
@@ -86,7 +97,6 @@ main(int argc, char *argv[])
 
 	win = tazterm_window_new(cfg, opt_shell, opt_workdir);
 	gtk_widget_show_all(win);
-	gtk_widget_grab_focus(GTK_WIDGET(win));
 
 	gtk_main();
 

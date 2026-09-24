@@ -32,11 +32,12 @@ cd src && make && ./tazterm
 - `Ctrl+Shift+F` : afficher / masquer la recherche (suit le panneau actif)
 - `F11` ou clic droit → `Plein écran` : basculer le plein écran
 - `Ctrl+Shift+A` : ouvrir un split agent IA (agent par défaut)
-- `Ctrl+Shift+T` ou clic droit → `Envoyer à l'agent` : envoyer la sélection du panneau courant au panneau agent (avec Entrée)
+- `Ctrl+Shift+T` ou clic droit → `Envoyer à l'agent` : coller la sélection du panneau courant dans le panneau agent (sans Entrée : on ajoute sa question puis on valide)
 - Clic droit → `Ouvrir un split agent (…)` : défaut, ou `Split agent : claude`
   / `Split agent : navette` pour les autres agents détectés
-- `Ctrl+Shift+S` : copier le scrollback (presse-papier + `/tmp/tazterm-capture-*.log`)
-- `Ctrl+Shift+X` : expliquer la dernière erreur (`/tmp/tazterm-explain-*.md` + presse-papier)
+- `Ctrl+Shift+S` : copier le scrollback (`capture_lines` dernières lignes, presse-papier seulement, rien sur disque)
+- `Ctrl+Shift+X` : expliquer la dernière erreur (`explain_lines` dernières lignes, collées dans le panneau agent sans Entrée + presse-papier)
+- Collage (`Ctrl+Shift+V`) : caractères de contrôle retirés ; un collage multi-ligne dans un shell sans bracketed paste (busybox ash) demande confirmation, car chaque ligne s'y exécuterait
 
 ## Agents IA : opencode, claude, navette
 

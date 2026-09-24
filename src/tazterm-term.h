@@ -25,31 +25,35 @@ VteTerminal *tazterm_term_new_cmd(TaztermConfig *cfg,
     const char *shell_override, const char *workdir_override,
     const char *command);
 
-/* Zoom: VTE font scale, clamped [0.5 .. 3.0]. */
-void tazterm_term_zoom_in(VteTerminal *term);
-void tazterm_term_zoom_out(VteTerminal *term);
-void tazterm_term_zoom_reset(VteTerminal *term);
-
 /* Search: set the (plain text) pattern and jump to the next match.
  * Returns TRUE when found. */
 gboolean tazterm_term_search(VteTerminal *term, const char *text);
 gboolean tazterm_term_search_next(VteTerminal *term);
 gboolean tazterm_term_search_prev(VteTerminal *term);
 
-/* Currently visible text (for output capture). Caller frees (g_free). */
+/* Visible rows only (debug dump). Caller frees (g_free). */
 char *tazterm_term_get_visible_text(VteTerminal *term);
 
-/* Currently selected text, or NULL when there is no selection.
- * Reads PRIMARY (does not touch CLIPBOARD). Caller frees (g_free). */
-char *tazterm_term_get_selected_text(VteTerminal *term);
+/* Last n rows of output, scrollback included, up to the cursor row
+ * (n <= 0: whole scrollback). Caller frees (g_free). */
+char *tazterm_term_get_text_tail(VteTerminal *term, int n);
 
-/* Feed text as one paste: strip C0 (keep tab/newline), wrap in
- * bracketed-paste, one trailing newline. FALSE if empty or too large. */
-gboolean tazterm_term_feed_paste(VteTerminal *term, const char *text);
+/* Clean text headed for a pty: keep tab/newline, drop other C0, DEL
+ * and C1 controls, repair invalid UTF-8, CR/CRLF -> LF.
+ * NULL when empty or too large. Caller frees (g_free). */
+char *tazterm_text_sanitize(const char *in);
 
-/* Manual paste from CLIPBOARD through the same sanitizer, but without
- * the trailing newline (paste never executes by itself). */
-gboolean tazterm_term_paste_clipboard(VteTerminal *term);
+/* Paste text, the current content of selection sel (CLIPBOARD or
+ * PRIMARY), into term: sanitized, then VTE's own paste (bracketed only
+ * when the app asked for it, never an Enter added).
+ * FALSE if nothing to paste. */
+gboolean tazterm_term_paste_text(VteTerminal *term, GdkAtom sel,
+    const char *text);
+
+/* Keyboard/menu paste from CLIPBOARD: async read, sanitized, and a
+ * confirmation dialog before a multi-line paste into a shell without
+ * bracketed paste (busybox ash), where each line would run. */
+void tazterm_term_paste_clipboard(VteTerminal *term);
 
 /* Active shell's cwd (/proc then OSC 7). Caller frees, NULL if unknown. */
 char *tazterm_term_get_cwd(VteTerminal *term);
