@@ -1514,6 +1514,8 @@ term_setup(VteTerminal *term, gpointer data)
 	g_signal_connect(term, "contents-changed",
 	    G_CALLBACK(on_contents_changed), NULL);
 	g_signal_connect(term, "destroy", G_CALLBACK(on_term_destroy), NULL);
+	/* Idle time counts from now, not from boot. */
+	on_contents_changed(term, NULL);
 	tazterm_ctl_event(term, "open", -1);
 }
 
