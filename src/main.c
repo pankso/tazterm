@@ -94,7 +94,8 @@ main(int argc, char *argv[])
 		  &opt_workdir, N_("Shell start directory"),
 		  N_("DIR") },
 		{ "shell", 's', 0, G_OPTION_ARG_STRING,
-		  &opt_shell, N_("Shell to run (default: /bin/sh)"),
+		  &opt_shell, N_("Shell to run (default: auto, bash when "
+		  "installed)"),
 		  N_("SHELL") },
 		{ "title", 'T', 0, G_OPTION_ARG_STRING,
 		  &opt_title, N_("Window title"), N_("TITLE") },
@@ -124,6 +125,23 @@ main(int argc, char *argv[])
 	bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
 	textdomain(GETTEXT_PACKAGE);
 
+	/* `tazterm help`: the shortcuts in use (with the user's [keys]),
+	 * in the terminal, no display needed. */
+	if (argc >= 2 && strcmp(argv[1], "help") == 0) {
+		char *text;
+
+		cfg = tazterm_config_load();
+		text = tazterm_keys_help(cfg->keys);
+		g_print("%s\n%s", _("TazTerm keyboard shortcuts (F1 in the "
+		    "window)"), text);
+		g_print("\n%s\n  %s\n  %s\n", _("More:"),
+		    _("tazterm --help       command line options"),
+		    _("tazterm ctl guide    how agents read your panes"));
+		g_free(text);
+		tazterm_config_free(cfg);
+		return 0;
+	}
+
 	/* Before parsing: --name / --class (GTK options) override it. */
 	g_set_prgname("tazterm");
 	cfg = tazterm_config_load();
@@ -133,6 +151,16 @@ main(int argc, char *argv[])
 	ctx = g_option_context_new(
 	    _("[-e COMMAND [ARGS...]] - light GTK3/VTE terminal"));
 	g_option_context_add_main_entries(ctx, entries, GETTEXT_PACKAGE);
+	{
+		char *keys = tazterm_keys_help(cfg->keys);
+		char *desc = g_strdup_printf("%s\n%s\n%s", _("Shortcuts "
+		    "(F1 in the window, or: tazterm help):"), keys,
+		    _("Agents: tazterm ctl --help, tazterm ctl guide"));
+
+		g_option_context_set_description(ctx, desc);
+		g_free(desc);
+		g_free(keys);
+	}
 	/* FALSE: no display needed to parse (-v works over SSH);
 	 * gtk_init_check() opens it below. */
 	g_option_context_add_group(ctx, gtk_get_option_group(FALSE));

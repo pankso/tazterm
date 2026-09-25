@@ -53,6 +53,7 @@ typedef struct {
 	char *title;        /* base title (-T), default "TazTerm" */
 	guint status_timer; /* 1 s status bar refresh */
 	GtkWidget *close_dialog; /* pending close confirmation */
+	GtkWidget *help;         /* shortcuts window, NULL when closed */
 	gboolean fullscreen;
 } TaztermWin;
 
@@ -71,6 +72,7 @@ win_free(gpointer data)
 
 static void status_update(VteTerminal *term);
 static gboolean agent_restart(VteTerminal *term);
+static void on_help(GtkMenuItem *item, gpointer data);
 
 /* Debug aid: SIGUSR1 dumps the active pane's text (headless rendering
  * checks). Registered only when TAZTERM_DEBUG is set. */
@@ -799,9 +801,105 @@ show_popup(TaztermWin *tw, VteTerminal *term, GdkEventButton *event)
 		    tw);
 		gtk_menu_shell_append(GTK_MENU_SHELL(menu), fs);
 	}
+	menu_add(menu, _("Keyboard Shortcuts"), G_CALLBACK(on_help), tw);
 
 	gtk_widget_show_all(menu);
 	gtk_menu_popup_at_pointer(GTK_MENU(menu), (GdkEvent *) event);
+}
+
+/* --- help: F1, the shortcuts in use ----------------------------------- */
+
+static void
+help_row(GtkWidget *grid, int row, const char *key, const char *desc)
+{
+	GtkWidget *k, *d;
+	char *markup;
+
+	markup = g_markup_printf_escaped("<tt>%s</tt>", key);
+	k = gtk_label_new(NULL);
+	gtk_label_set_markup(GTK_LABEL(k), markup);
+	g_free(markup);
+	gtk_label_set_xalign(GTK_LABEL(k), 0.0);
+	d = gtk_label_new(desc);
+	gtk_label_set_xalign(GTK_LABEL(d), 0.0);
+	gtk_grid_attach(GTK_GRID(grid), k, 0, row, 1, 1);
+	gtk_grid_attach(GTK_GRID(grid), d, 1, row, 1, 1);
+}
+
+static void
+help_title(GtkWidget *grid, int row, const char *title)
+{
+	GtkWidget *l;
+	char *markup;
+
+	markup = g_markup_printf_escaped("<b>%s</b>", title);
+	l = gtk_label_new(NULL);
+	gtk_label_set_markup(GTK_LABEL(l), markup);
+	g_free(markup);
+	gtk_label_set_xalign(GTK_LABEL(l), 0.0);
+	if (row)
+		gtk_widget_set_margin_top(l, 10);
+	gtk_grid_attach(GTK_GRID(grid), l, 0, row, 2, 1);
+}
+
+/* Built from the [keys] table: what it shows is what works, custom
+ * bindings included. One per window, F1 again brings it up. */
+static void
+help_show(TaztermWin *tw)
+{
+	GtkWidget *grid, *scroll, *area;
+	const char *key, *desc;
+	int g, a, row = 0;
+
+	if (tw->help) {
+		gtk_window_present(GTK_WINDOW(tw->help));
+		return;
+	}
+	tw->help = gtk_dialog_new_with_buttons(_("Keyboard Shortcuts"),
+	    GTK_WINDOW(tw->win), GTK_DIALOG_DESTROY_WITH_PARENT,
+	    _("_Close"), GTK_RESPONSE_CLOSE, NULL);
+	g_object_add_weak_pointer(G_OBJECT(tw->help), (gpointer *) &tw->help);
+	g_signal_connect(tw->help, "response",
+	    G_CALLBACK(gtk_widget_destroy), NULL);
+	grid = gtk_grid_new();
+	gtk_grid_set_column_spacing(GTK_GRID(grid), 24);
+	gtk_grid_set_row_spacing(GTK_GRID(grid), 3);
+	g_object_set(grid, "margin", 12, NULL);
+	for (g = 0; g < TAZTERM_KEY_GROUPS; g++) {
+		help_title(grid, row++, tazterm_keys_group_title(g));
+		for (a = 0; a < TAZTERM_KEY_N; a++)
+			if (tazterm_keys_group(a) == g &&
+			    *tazterm_keys_text(tw->cfg->keys, a))
+				help_row(grid, row++,
+				    tazterm_keys_text(tw->cfg->keys, a),
+				    tazterm_keys_desc(a));
+	}
+	help_title(grid, row++, _("Mouse and fixed keys"));
+	for (a = 0; tazterm_keys_fixed(a, &key, &desc); a++)
+		help_row(grid, row++, key, desc);
+	help_title(grid, row++, _("In a pane"));
+	help_row(grid, row++, "tazterm help", _("These shortcuts as text"));
+	help_row(grid, row++, "tazterm ctl guide",
+	    _("How agents read your panes"));
+
+	scroll = gtk_scrolled_window_new(NULL, NULL);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+	    GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+	gtk_scrolled_window_set_min_content_height(
+	    GTK_SCROLLED_WINDOW(scroll), 460);
+	gtk_container_add(GTK_CONTAINER(scroll), grid);
+	area = gtk_dialog_get_content_area(GTK_DIALOG(tw->help));
+	gtk_box_pack_start(GTK_BOX(area), scroll, TRUE, TRUE, 0);
+	gtk_widget_show_all(tw->help);
+	if (tazterm_debug())
+		g_printerr("tazterm: help shown (%d rows)\n", row);
+}
+
+static void
+on_help(GtkMenuItem *item, gpointer data)
+{
+	(void) item;
+	help_show(TW(data));
 }
 
 /* --- Ctrl+click: URLs and file:line --------------------------------- */
@@ -1109,6 +1207,9 @@ on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer data)
 		return TRUE;
 	case TAZTERM_KEY_FULLSCREEN:
 		fullscreen_set(tw, !tw->fullscreen);
+		return TRUE;
+	case TAZTERM_KEY_HELP:
+		help_show(tw);
 		return TRUE;
 	default:
 		return FALSE;

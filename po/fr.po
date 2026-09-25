@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tazterm\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-25 00:41+0200\n"
+"POT-Creation-Date: 2026-09-25 03:36+0200\n"
 "PO-Revision-Date: 2026-09-24 20:00+0200\n"
 "Last-Translator: SliTaz Contributors\n"
 "Language-Team: French\n"
@@ -16,164 +16,190 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/tazterm-window.c:359
+#: src/tazterm-window.c:364
 msgid "Close this pane?"
 msgstr "Fermer ce panneau ?"
 
-#: src/tazterm-window.c:359
+#: src/tazterm-window.c:364
 msgid "Close TazTerm?"
 msgstr "Fermer TazTerm ?"
 
-#: src/tazterm-window.c:361
+#: src/tazterm-window.c:366
 #, c-format
 msgid "Still running: %s. It will be stopped."
 msgstr "Encore en cours : %s. Il sera arrêté."
 
-#: src/tazterm-window.c:364 src/tazterm-term.c:887
+#: src/tazterm-window.c:369 src/tazterm-term.c:894
 msgid "Cancel"
 msgstr "Annuler"
 
-#: src/tazterm-window.c:365
+#: src/tazterm-window.c:370
 msgid "Close"
 msgstr "Fermer"
 
-#: src/tazterm-window.c:716
+#: src/tazterm-window.c:721 src/tazterm-keys.c:28
 msgid "Copy"
 msgstr "Copier"
 
-#: src/tazterm-window.c:717 src/tazterm-term.c:888
+#: src/tazterm-window.c:722 src/tazterm-term.c:895 src/tazterm-keys.c:30
 msgid "Paste"
 msgstr "Coller"
 
-#: src/tazterm-window.c:718
+#: src/tazterm-window.c:723
 msgid "Select All"
 msgstr "Tout sélectionner"
 
-#: src/tazterm-window.c:722
+#: src/tazterm-window.c:727
 msgid "Find…"
 msgstr "Rechercher…"
 
-#: src/tazterm-window.c:725
+#: src/tazterm-window.c:730
 msgid "Split Side by Side"
 msgstr "Diviser côté à côté"
 
-#: src/tazterm-window.c:727
+#: src/tazterm-window.c:732
 msgid "Split Stacked"
 msgstr "Diviser empilés"
 
-#: src/tazterm-window.c:728
+#: src/tazterm-window.c:733
 msgid "Close Pane"
 msgstr "Fermer ce panneau"
 
-#: src/tazterm-window.c:738
+#: src/tazterm-window.c:743
 #, c-format
 msgid "Open Agent Split (%s)"
 msgstr "Ouvrir un split agent (%s)"
 
-#: src/tazterm-window.c:749
+#: src/tazterm-window.c:754
 #, c-format
 msgid "Agent Split: %s"
 msgstr "Split agent : %s"
 
-#: src/tazterm-window.c:757
+#: src/tazterm-window.c:762
 msgid "Copy Scrollback"
 msgstr "Copier le scrollback"
 
-#: src/tazterm-window.c:759
+#: src/tazterm-window.c:764
 msgid "Explain Last Error"
 msgstr "Expliquer la dernière erreur"
 
-#: src/tazterm-window.c:773
+#: src/tazterm-window.c:778
 msgid "Send to Agent"
 msgstr "Envoyer à l'agent"
 
-#: src/tazterm-window.c:783
+#: src/tazterm-window.c:788
 msgid "Zoom In"
 msgstr "Zoom avant"
 
-#: src/tazterm-window.c:784
+#: src/tazterm-window.c:789
 msgid "Zoom Out"
 msgstr "Zoom arrière"
 
-#: src/tazterm-window.c:785
+#: src/tazterm-window.c:790
 msgid "Normal Size"
 msgstr "Taille normale"
 
-#: src/tazterm-window.c:792
+#: src/tazterm-window.c:797 src/tazterm-keys.c:82
 msgid "Fullscreen"
 msgstr "Plein écran"
 
-#: src/tazterm-window.c:1256
+#: src/tazterm-window.c:804 src/tazterm-window.c:858
+msgid "Keyboard Shortcuts"
+msgstr "Raccourcis clavier"
+
+#: src/tazterm-window.c:860
+msgid "_Close"
+msgstr "_Fermer"
+
+#: src/tazterm-window.c:877 src/tazterm-keys.c:309
+msgid "Mouse and fixed keys"
+msgstr "Souris et touches fixes"
+
+#: src/tazterm-window.c:880
+msgid "In a pane"
+msgstr "Dans un panneau"
+
+#: src/tazterm-window.c:881
+msgid "These shortcuts as text"
+msgstr "Ces raccourcis en texte"
+
+#: src/tazterm-window.c:883
+msgid "How agents read your panes"
+msgstr "Comment les agents lisent vos panneaux"
+
+#: src/tazterm-window.c:1346
 msgid "agent"
 msgstr "agent"
 
-#: src/tazterm-window.c:1256
+#: src/tazterm-window.c:1346
 msgid "shell"
 msgstr "shell"
 
-#: src/tazterm-window.c:1256
+#: src/tazterm-window.c:1346
 msgid "command"
 msgstr "commande"
 
-#: src/tazterm-window.c:1267
+#: src/tazterm-window.c:1358
 #, c-format
 msgid "done (exit %d)"
 msgstr "terminé (code %d)"
 
-#: src/tazterm-window.c:1268
+#: src/tazterm-window.c:1359
 msgid "done (signal)"
 msgstr "terminé (signal)"
 
-#: src/tazterm-window.c:1271
+#: src/tazterm-window.c:1362
 msgid "waiting for you"
 msgstr "attend une réponse"
 
-#: src/tazterm-window.c:1275 src/tazterm-window.c:1278
+#: src/tazterm-window.c:1366 src/tazterm-window.c:1369
 msgid "done"
 msgstr "fini"
 
-#: src/tazterm-window.c:1278 src/tazterm-window.c:1291
+#: src/tazterm-window.c:1369 src/tazterm-window.c:1382
 msgid "exit"
 msgstr "code"
 
-#: src/tazterm-window.c:1283 src/tazterm-window.c:1288
+#: src/tazterm-window.c:1374 src/tazterm-window.c:1379
 msgid "active"
 msgstr "actif"
 
-#: src/tazterm-window.c:1284
+#: src/tazterm-window.c:1375
 msgid "running"
 msgstr "en cours"
 
-#: src/tazterm-window.c:1288
+#: src/tazterm-window.c:1379
 msgid "working"
 msgstr "travaille"
 
-#: src/tazterm-window.c:1293
+#: src/tazterm-window.c:1384
 #, c-format
 msgid "idle · %s"
 msgstr "en attente · %s"
 
-#: src/tazterm-window.c:1295
+#: src/tazterm-window.c:1386
 #, c-format
 msgid "quiet · %s"
 msgstr "silencieux · %s"
 
-#: src/tazterm-window.c:1413
+#: src/tazterm-window.c:1504
 #, c-format
 msgid "agent exited with code %d — Enter to restart, Ctrl+Shift+W to close"
-msgstr "agent terminé, code %d — Entrée pour relancer, Ctrl+Shift+W pour fermer"
+msgstr ""
+"agent terminé, code %d — Entrée pour relancer, Ctrl+Shift+W pour fermer"
 
-#: src/tazterm-window.c:1415
+#: src/tazterm-window.c:1506
 #, c-format
 msgid "agent killed by signal %d — Enter to restart, Ctrl+Shift+W to close"
-msgstr "agent tué par le signal %d — Entrée pour relancer, Ctrl+Shift+W pour fermer"
+msgstr ""
+"agent tué par le signal %d — Entrée pour relancer, Ctrl+Shift+W pour fermer"
 
-#: src/tazterm-window.c:1419
+#: src/tazterm-window.c:1510
 #, c-format
 msgid "exited with code %d — Ctrl+Shift+W to close"
 msgstr "terminé, code %d — Ctrl+Shift+W pour fermer"
 
-#: src/tazterm-window.c:1422
+#: src/tazterm-window.c:1513
 #, c-format
 msgid "killed by signal %d — Ctrl+Shift+W to close"
 msgstr "tué par le signal %d — Ctrl+Shift+W pour fermer"
@@ -187,46 +213,222 @@ msgid "DIR"
 msgstr "DOSSIER"
 
 #: src/main.c:97
-msgid "Shell to run (default: /bin/sh)"
-msgstr "Shell à lancer (défaut : /bin/sh)"
+msgid "Shell to run (default: auto, bash when installed)"
+msgstr "Shell à lancer (défaut : auto, bash s'il est installé)"
 
-#: src/main.c:98
+#: src/main.c:99
 msgid "SHELL"
 msgstr "SHELL"
 
-#: src/main.c:100
+#: src/main.c:101
 msgid "Window title"
 msgstr "Titre de la fenêtre"
 
-#: src/main.c:100
+#: src/main.c:101
 msgid "TITLE"
 msgstr "TITRE"
 
-#: src/main.c:102
+#: src/main.c:103
 msgid "Size in characters (80x24[+X+Y])"
 msgstr "Taille en caractères (80x24[+X+Y])"
 
-#: src/main.c:103
+#: src/main.c:104
 msgid "GEOMETRY"
 msgstr "GÉOMÉTRIE"
 
-#: src/main.c:105
+#: src/main.c:106
 msgid "Keep the window after the -e command ends"
 msgstr "Garder la fenêtre après la fin de -e"
 
-#: src/main.c:107
+#: src/main.c:108
 msgid "Show the version"
 msgstr "Afficher la version"
 
-#: src/main.c:134
+#: src/main.c:135
+msgid "TazTerm keyboard shortcuts (F1 in the window)"
+msgstr "Raccourcis clavier de TazTerm (F1 dans la fenêtre)"
+
+#: src/main.c:137
+msgid "More:"
+msgstr "Plus :"
+
+#: src/main.c:138
+msgid "tazterm --help       command line options"
+msgstr "tazterm --help       options de la ligne de commande"
+
+#: src/main.c:139
+msgid "tazterm ctl guide    how agents read your panes"
+msgstr "tazterm ctl guide    comment les agents lisent vos panneaux"
+
+#: src/main.c:152
 msgid "[-e COMMAND [ARGS...]] - light GTK3/VTE terminal"
 msgstr "[-e COMMANDE [ARGS...]] - terminal léger GTK3/VTE"
 
-#: src/tazterm-term.c:880
+#: src/main.c:156
+msgid "Shortcuts (F1 in the window, or: tazterm help):"
+msgstr "Raccourcis (F1 dans la fenêtre, ou : tazterm help) :"
+
+#: src/main.c:158
+msgid "Agents: tazterm ctl --help, tazterm ctl guide"
+msgstr "Agents : tazterm ctl --help, tazterm ctl guide"
+
+#: src/tazterm-term.c:887
 #, c-format
 msgid "Paste %u lines into the shell?"
 msgstr "Coller %u lignes dans le shell ?"
 
-#: src/tazterm-term.c:883
+#: src/tazterm-term.c:890
 msgid "This shell runs each line as soon as it is pasted."
 msgstr "Ce shell exécute chaque ligne dès qu'elle est collée."
+
+#: src/tazterm-keys.c:32
+msgid "Close the window"
+msgstr "Fermer la fenêtre"
+
+#: src/tazterm-keys.c:34
+msgid "Find in the scrollback"
+msgstr "Rechercher dans l'historique"
+
+#: src/tazterm-keys.c:36
+msgid "Split side by side"
+msgstr "Diviser côte à côte"
+
+#: src/tazterm-keys.c:38
+msgid "Split stacked"
+msgstr "Diviser en pile"
+
+#: src/tazterm-keys.c:40
+msgid "Close the pane"
+msgstr "Fermer le panneau"
+
+#: src/tazterm-keys.c:42
+msgid "Zoom the pane (again: restore)"
+msgstr "Agrandir le panneau (à nouveau : restaurer)"
+
+#: src/tazterm-keys.c:44
+msgid "Equalize pane sizes"
+msgstr "Égaliser les panneaux"
+
+#: src/tazterm-keys.c:46
+msgid "Go to the pane on the left"
+msgstr "Aller au panneau de gauche"
+
+#: src/tazterm-keys.c:48
+msgid "Go to the pane on the right"
+msgstr "Aller au panneau de droite"
+
+#: src/tazterm-keys.c:50
+msgid "Go to the pane above"
+msgstr "Aller au panneau du dessus"
+
+#: src/tazterm-keys.c:52
+msgid "Go to the pane below"
+msgstr "Aller au panneau du dessous"
+
+#: src/tazterm-keys.c:54
+msgid "Move the pane border left"
+msgstr "Déplacer la bordure vers la gauche"
+
+#: src/tazterm-keys.c:56
+msgid "Move the pane border right"
+msgstr "Déplacer la bordure vers la droite"
+
+#: src/tazterm-keys.c:58
+msgid "Move the pane border up"
+msgstr "Déplacer la bordure vers le haut"
+
+#: src/tazterm-keys.c:60
+msgid "Move the pane border down"
+msgstr "Déplacer la bordure vers le bas"
+
+#: src/tazterm-keys.c:62
+msgid "Previous prompt (bash)"
+msgstr "Invite précédente (bash)"
+
+#: src/tazterm-keys.c:64
+msgid "Next prompt (bash)"
+msgstr "Invite suivante (bash)"
+
+#: src/tazterm-keys.c:66
+msgid "Open an agent split"
+msgstr "Ouvrir un panneau agent"
+
+#: src/tazterm-keys.c:68
+msgid "Send the selection to the agent"
+msgstr "Envoyer la sélection à l'agent"
+
+#: src/tazterm-keys.c:70
+msgid "Send the last command to the agent"
+msgstr "Envoyer la dernière commande à l'agent"
+
+#: src/tazterm-keys.c:72
+msgid "Copy the scrollback"
+msgstr "Copier l'historique"
+
+#: src/tazterm-keys.c:75
+msgid "Bigger font"
+msgstr "Police plus grande"
+
+#: src/tazterm-keys.c:78
+msgid "Smaller font"
+msgstr "Police plus petite"
+
+#: src/tazterm-keys.c:80
+msgid "Default font size"
+msgstr "Taille de police par défaut"
+
+#: src/tazterm-keys.c:84
+msgid "Keyboard shortcuts (this help)"
+msgstr "Raccourcis clavier (cette aide)"
+
+#: src/tazterm-keys.c:260
+msgid "Panes"
+msgstr "Panneaux"
+
+#: src/tazterm-keys.c:260
+msgid "Terminal"
+msgstr "Terminal"
+
+#: src/tazterm-keys.c:260
+msgid "Agents"
+msgstr "Agents"
+
+#: src/tazterm-keys.c:272
+msgid "Ctrl+click"
+msgstr "Ctrl+clic"
+
+#: src/tazterm-keys.c:272
+msgid "Open a URL or file:line"
+msgstr "Ouvrir une URL ou fichier:ligne"
+
+#: src/tazterm-keys.c:273
+msgid "Right click"
+msgstr "Clic droit"
+
+#: src/tazterm-keys.c:273
+msgid "Menu"
+msgstr "Menu"
+
+#: src/tazterm-keys.c:274
+msgid "Click on exit N"
+msgstr "Clic sur exit N"
+
+#: src/tazterm-keys.c:274
+msgid "Send the failed command to the agent"
+msgstr "Envoyer la commande en échec à l'agent"
+
+#: src/tazterm-keys.c:275
+msgid "Enter"
+msgstr "Entrée"
+
+#: src/tazterm-keys.c:275
+msgid "Restart an agent that quit (in its pane)"
+msgstr "Relancer un agent terminé (dans son panneau)"
+
+#: src/tazterm-keys.c:276
+msgid "Esc"
+msgstr "Échap"
+
+#: src/tazterm-keys.c:276
+msgid "Close the search bar"
+msgstr "Fermer la barre de recherche"

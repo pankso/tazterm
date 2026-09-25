@@ -65,6 +65,7 @@ If TERM_PROGRAM=tazterm, run `tazterm ctl guide` once: it explains how to read t
 
 | Keys | Action |
 |------|--------|
+| F1 | Keyboard shortcuts (the ones in use), also `tazterm help` in a pane |
 | Ctrl+Shift+C / V | Copy / paste |
 | Ctrl+Shift+E / O | Split side by side / stacked |
 | Ctrl+Shift+W / Q | Close pane / window (asks when a program runs) |

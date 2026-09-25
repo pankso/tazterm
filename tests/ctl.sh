@@ -134,6 +134,20 @@ if command -v bash >/dev/null; then
 	sleep 1
 fi
 
+# Help: the shortcuts in use, custom [keys] included, no display.
+check "help without display" \
+	'DISPLAY= LANG=C "$BIN" help | grep -q "Ctrl+Shift+E *Split side by side"'
+mkdir -p "$XDG_CACHE_HOME/helpconf/tazterm"
+printf '[keys]\nsplit_side=Super+Return\nfocus_left=\n' \
+	>"$XDG_CACHE_HOME/helpconf/tazterm/tazterm.conf"
+check "help shows custom keys" \
+	'XDG_CONFIG_HOME=$XDG_CACHE_HOME/helpconf LANG=C "$BIN" help |
+	 grep -q "Super+Return *Split side by side" &&
+	 ! XDG_CONFIG_HOME=$XDG_CACHE_HOME/helpconf LANG=C "$BIN" help |
+	 grep -q "pane on the left"'
+check "--help lists shortcuts" \
+	'DISPLAY= LANG=C "$BIN" --help | grep -q "F1 *Keyboard shortcuts"'
+
 check "-v without display" 'DISPLAY= "$BIN" -v | grep -q "^tazterm "'
 
 exit $fails

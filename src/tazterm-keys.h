@@ -48,6 +48,7 @@ typedef enum {
 	TAZTERM_KEY_FONT_SMALLER,
 	TAZTERM_KEY_FONT_RESET,
 	TAZTERM_KEY_FULLSCREEN,
+	TAZTERM_KEY_HELP,
 	TAZTERM_KEY_N
 } TaztermKeyAction;
 
@@ -61,6 +62,27 @@ void tazterm_keys_free(TaztermKeys *keys);
 /* Action bound to a key press, -1 when none. */
 int tazterm_keys_lookup(const TaztermKeys *keys, guint keyval,
     GdkModifierType state);
+
+/* The first binding of an action for display ("Ctrl+Shift+E"), ""
+ * when disabled. */
+const char *tazterm_keys_text(const TaztermKeys *keys, int action);
+
+/* What an action does, translated ("Split side by side"). */
+const char *tazterm_keys_desc(int action);
+
+/* Group of an action (0: panes, 1: terminal, 2: agents) and its
+ * translated title. */
+int tazterm_keys_group(int action);
+const char *tazterm_keys_group_title(int group);
+#define TAZTERM_KEY_GROUPS 3
+
+/* i-th mouse action or fixed key (Ctrl+click, Enter in an exited
+ * agent pane...), translated. FALSE past the last one. */
+gboolean tazterm_keys_fixed(int i, const char **key, const char **desc);
+
+/* Every shortcut in use, by group, plus the mouse and fixed keys:
+ * plain text for `tazterm help`, --help and agents. g_free. */
+char *tazterm_keys_help(const TaztermKeys *keys);
 
 /* Commented [keys] section with every action and its default, for the
  * config file written on first run. g_free. */
