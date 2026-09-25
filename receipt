@@ -1,7 +1,7 @@
 # SliTaz package receipt.
 
 PACKAGE="tazterm"
-VERSION="0.9"
+VERSION="0.9.1"
 CATEGORY="utilities"
 SHORT_DESC="GTK3/VTE terminal with split panes, made for AI agents."
 MAINTAINER="pankso@slitaz.org"
