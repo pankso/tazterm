@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define RCFILE_VERSION "tazterm bash integration v1"
+#define RCFILE_VERSION "tazterm bash integration v2"
 #define URI_PREFIX "file://localhost/tazterm/"
 #define MAX_MARKS 2000
 
@@ -34,6 +34,9 @@ static const char rcfile_sh[] =
 "# (OSC 6: command blocks) and reports the cwd (OSC 7) to tazterm.\n"
 "# Personal settings belong in ~/.bashrc, not here.\n"
 "[ -r \"$HOME/.bashrc\" ] && . \"$HOME/.bashrc\"\n"
+"# SliTaz's bashrc exports PS1: `su` would give root our \"$ \" prompt\n"
+"# and the marks below. Keep it local to this shell.\n"
+"export -n PS1\n"
 "if [ -n \"$TAZTERM_MARK_TOKEN\" ] && [ -z \"$__tazterm_hooked\" ]; then\n"
 "\t__tazterm_hooked=1\n"
 "\t__tazterm_n=0\n"
