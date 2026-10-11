@@ -66,7 +66,9 @@ css_ensure(void)
 	    ".tazterm-pane-focused { outline-color: #4a90d9; }"
 	    ".tazterm-pane-attention { outline-color: #f57900; }"
 	    ".tazterm-status { background-color: #111317; padding: 1px 6px; }"
-	    ".tazterm-status label { color: #8a919c; font-size: 8pt; }",
+	    ".tazterm-status label { color: #8a919c; font-size: 8pt; }"
+	    /* Thinner than the theme's 4px; GTK keeps a wider grab area. */
+	    ".tazterm-split > separator { min-width: 2px; min-height: 2px; }",
 	    -1, NULL);
 	gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),
 	    GTK_STYLE_PROVIDER(css),
@@ -493,6 +495,8 @@ split_current(GtkWidget *split, GtkOrientation orientation,
 	parent = gtk_widget_get_parent(leaf);
 
 	paned = gtk_paned_new(orientation);
+	gtk_style_context_add_class(gtk_widget_get_style_context(paned),
+	    "tazterm-split");
 	/* The new pane inherits the active pane's cwd
 	 * (fallback: overrides > config > $HOME when unknown). */
 	{
