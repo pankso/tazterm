@@ -71,6 +71,7 @@ win_free(gpointer data)
 #define TW(x) ((TaztermWin *) (x))
 
 static void status_update(VteTerminal *term);
+static void status_flash(VteTerminal *term, const char *text);
 static gboolean agent_restart(VteTerminal *term);
 static void on_help(GtkMenuItem *item, gpointer data);
 
@@ -501,6 +502,18 @@ ai_copy_scrollback(TaztermWin *tw)
 	if (tazterm_debug())
 		g_printerr("tazterm: scrollback copy (%lu bytes)\n",
 		    (unsigned long) strlen(text));
+	{
+		const char *p;
+		int n = *text ? 1 : 0;
+		char *msg;
+
+		for (p = text; *p; p++)
+			if (*p == '\n')
+				n++;
+		msg = g_strdup_printf(_("scrollback copied: %d lines"), n);
+		status_flash(term, msg);
+		g_free(msg);
+	}
 	g_free(text);
 }
 
@@ -523,8 +536,20 @@ ai_explain(TaztermWin *tw, VteTerminal *term)
 	    prompt, -1);
 	agent = tazterm_split_find_agent(tw->split);
 	if (agent && agent != term &&
-	    tazterm_term_paste_text(agent, GDK_SELECTION_CLIPBOARD, prompt))
+	    tazterm_term_paste_text(agent, GDK_SELECTION_CLIPBOARD, prompt)) {
+		char *msg;
+
 		gtk_widget_grab_focus(GTK_WIDGET(agent));
+		/* Shown where the eyes go: the agent pane. */
+		msg = g_strdup_printf(
+		    _("error from pane %d pasted: Enter to send"),
+		    tazterm_term_get_id(term));
+		status_flash(agent, msg);
+		g_free(msg);
+	} else {
+		status_flash(term, _("explain prompt copied: paste it "
+		    "to an agent"));
+	}
 	if (tazterm_debug())
 		g_printerr("tazterm: explain (%lu bytes) -> %s\n",
 		    (unsigned long) strlen(prompt),
@@ -1252,8 +1277,10 @@ on_pane_focus(VteTerminal *term, gpointer data)
  *   tazterm-last-output  monotonic seconds of the last screen change
  *   tazterm-bell         BEL not seen yet by the user
  *   tazterm-exit         held pane: wait status + 1
- *   tazterm-done         long command ended out of sight: exit + 1 */
+ *   tazterm-done         long command ended out of sight: exit + 1
+ *   tazterm-flash        short action feedback, until tazterm-flash-until */
 #define STATUS_BUSY_SECS 2
+#define STATUS_FLASH_SECS 4
 
 static int
 now_secs(void)
@@ -1320,7 +1347,7 @@ status_update(VteTerminal *term)
 	gboolean agent, shell, zoomed;
 	char *proc, *cwd, *spath, *ltext, *age;
 	const char *shell_path;
-	const char *base;
+	const char *base, *flash;
 	char *rtext;
 	int idle, exitst, running, last_exit, done;
 
@@ -1353,7 +1380,16 @@ status_update(VteTerminal *term)
 	age = fmt_age(idle);
 	base = shell_path ? strrchr(shell_path, '/') : NULL;
 	base = base ? base + 1 : shell_path;
-	if (exitst)
+	flash = g_object_get_data(G_OBJECT(term), "tazterm-flash");
+	if (flash && now_secs() >= GPOINTER_TO_INT(g_object_get_data(
+	    G_OBJECT(term), "tazterm-flash-until"))) {
+		g_object_set_data(G_OBJECT(term), "tazterm-flash", NULL);
+		flash = NULL;
+	}
+	if (flash)
+		rtext = g_markup_printf_escaped(
+		    "<span foreground=\"#729fcf\">✓ %s</span>", flash);
+	else if (exitst)
 		rtext = WIFEXITED(exitst - 1) ?
 		    g_strdup_printf(_("done (exit %d)"),
 		    WEXITSTATUS(exitst - 1)) : g_strdup(_("done (signal)"));
@@ -1394,6 +1430,18 @@ status_update(VteTerminal *term)
 	g_free(ltext);
 	g_free(age);
 	g_free(rtext);
+}
+
+/* Feedback for actions that only fill the clipboard, else invisible.
+ * Shown for STATUS_FLASH_SECS, then the regular status comes back. */
+static void
+status_flash(VteTerminal *term, const char *text)
+{
+	g_object_set_data_full(G_OBJECT(term), "tazterm-flash",
+	    g_strdup(text), g_free);
+	g_object_set_data(G_OBJECT(term), "tazterm-flash-until",
+	    GINT_TO_POINTER(now_secs() + STATUS_FLASH_SECS));
+	status_update(term);
 }
 
 static gboolean
