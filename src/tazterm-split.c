@@ -67,8 +67,12 @@ css_ensure(void)
 	    ".tazterm-pane-attention { outline-color: #f57900; }"
 	    ".tazterm-status { background-color: #111317; padding: 1px 6px; }"
 	    ".tazterm-status label { color: #8a919c; font-size: 8pt; }"
-	    /* Thinner than the theme's 4px; GTK keeps a wider grab area. */
-	    ".tazterm-split > separator { min-width: 2px; min-height: 2px; }",
+	    /* Our own solid bar: themes paint it like the terminal
+	     * background, add separator margins or a dotted grip. GTK
+	     * keeps a wider grab area. */
+	    ".tazterm-split > separator { min-width: 4px; min-height: 4px;"
+	    " margin: 0; border: none; background-image: none;"
+	    " -gtk-icon-source: none; background-color: #3a3d44; }",
 	    -1, NULL);
 	gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),
 	    GTK_STYLE_PROVIDER(css),
