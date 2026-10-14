@@ -19,7 +19,7 @@ Coding agents run in a terminal, and the first thing they ask is "paste me the e
 - Split panes in one window (side by side, stacked, keyboard navigation), window-wide zoom, fullscreen, search
 - Per-pane status line: id, role (shell, agent, command), foreground process, directory, activity
 - Command blocks for bash: every command with its output, exit code and duration; jump from prompt to prompt
-- `tazterm ctl`: `ls`, `read`, `read -l`, `blocks`, `wait`, `wait --idle`, `events`, `notify`, `guide`, with JSON output (`-j`)
+- `tazterm ctl`: `ls`, `read`, `read -l`, `blocks`, `wait`, `wait --idle`, `events`, `notify`, `send` (confirmed by you), `guide`, with JSON output (`-j`)
 - Agent panes: detects claude, opencode and navette (also when started by hand in a shell), opens one in a split, sends a selection or the last failed command to the agent you used last (never submitted: you add your question). An agent that quits leaves its pane: Enter starts it again. `agent=` takes arguments (`claude --continue`)
 - Click on a red `✗ exit N` in a status line: the failed command goes to the agent
 - Safe paste: control characters stripped, bracketed paste handled by VTE, confirmation before a multi-line paste into a shell that would run every line
@@ -41,10 +41,13 @@ tazterm ctl wait            # wait for the next command there to end, exit with 
 tazterm ctl wait --idle -p 3  # wait for pane 3 to go quiet, ring or exit
 tazterm ctl events          # live stream: block, bell, notify, open, exit, close
 tazterm ctl notify "done"   # outline the agent's pane, set the urgency hint
+tazterm ctl send -w "make"  # propose a command: runs only if you accept it
 tazterm ctl guide           # how an agent should use all this (markdown)
 ```
 
 `wait` lets an agent say "run `make` in your pane" and get the result without running anything itself. `wait --idle` and `events` let an agent follow other agents working in the next panes: an orchestrator knows when a turn ends without polling. Add `-j` to `ls`, `read`, `blocks`, `wait` or `events` for JSON, secrets already masked.
+
+`send` is off until you set `send=true` in `[ai]`. Then an agent can propose a command for a pane: a dialog shows the exact text, where it comes from and where it goes, and nothing happens unless you press Run. Enter, Escape and two minutes without an answer all refuse. `-r` runs it (Enter), `-w` also waits for it to end and returns its output and exit code; without them the text is only typed at the cursor.
 
 To teach your agent, add one line to your `CLAUDE.md` or `AGENTS.md`:
 
@@ -56,6 +59,7 @@ If TERM_PROGRAM=tazterm, run `tazterm ctl guide` once: it explains how to read t
 
 - One Unix socket per window, in `$XDG_RUNTIME_DIR/tazterm/` (else `~/.cache/tazterm/`, else `/tmp/tazterm-UID/` when the path would be too long), directory 0700 checked for owner and symlinks, peer uid verified, removed on exit.
 - Read-only protocol, one request line, async I/O with timeouts: a stuck client never freezes the window.
+- `send`, the one write, is off by default and always confirmed: Refuse is the default button, Run cannot be pressed during the first second, one request at a time. The text must be a single line of visible characters (no controls, no bidi or zero-width characters), so what you read is exactly what the shell gets.
 - Command block marks carry a random per-pane token: `cat` of a crafted file cannot forge blocks or exit codes.
 - Paste: C0 and C1 controls stripped, invalid UTF-8 repaired, 256 KiB cap; VTE adds bracketed paste only when the application asked for it.
 - Nothing written to disk: captures go to the clipboard or to the agent, never to `/tmp`.
@@ -110,6 +114,8 @@ agent=auto
 explain_lines=200
 capture_lines=2000
 redact=true
+# agents may propose commands (ctl send), each one confirmed
+send=false
 
 [keys]
 # Every shortcut, several per action, empty to give the key back to

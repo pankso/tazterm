@@ -19,6 +19,8 @@
  *   agent=auto
  *   explain_lines=200
  *   capture_lines=2000
+ *   redact=true
+ *   send=false
  */
 #include "tazterm-config.h"
 #include "tazterm-term.h"
@@ -101,7 +103,10 @@ static const char default_conf[] =
 "explain_lines=" G_STRINGIFY(TAZTERM_DEFAULT_EXPLAIN) "\n"
 "capture_lines=" G_STRINGIFY(TAZTERM_DEFAULT_CAPTURE) "\n"
 "# Mask keys, tokens and passwords in text handed to agents\n"
-"redact=true\n";
+"redact=true\n"
+"# Let agents propose a command for a pane (tazterm ctl send): each\n"
+"# one waits for your OK in a dialog, Refuse is the default\n"
+"send=false\n";
 
 /* Color themes: foreground, background, cursor ("" = VTE's), then
  * the 16 palette colors (8 normal, 8 bright). */
@@ -332,6 +337,9 @@ tazterm_config_load(void)
 	if (g_key_file_has_key(kf, "ai", "redact", NULL))
 		cfg->ai_redact = g_key_file_get_boolean(kf, "ai", "redact",
 		    NULL);
+
+	if (g_key_file_has_key(kf, "ai", "send", NULL))
+		cfg->ai_send = g_key_file_get_boolean(kf, "ai", "send", NULL);
 
 	cfg->keys = tazterm_keys_new(kf);
 

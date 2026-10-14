@@ -304,3 +304,37 @@ tazterm_json_string(GString *out, const char *s)
 	g_string_append_c(out, '"');
 	g_free(valid);
 }
+
+/* What the user confirms must be what the shell gets: one line of
+ * visible text. Control characters (Enter, escapes), format characters
+ * (bidi overrides, zero-width, soft hyphen) and line separators would
+ * hide part of a command in the dialog, so they refuse the request
+ * rather than being stripped. */
+const char *
+tazterm_ai_send_check(const char *text)
+{
+	const char *p;
+
+	if (!text || !*text)
+		return "empty text";
+	if (strlen(text) > TAZTERM_SEND_MAX)
+		return "text too long";
+	if (!g_utf8_validate(text, -1, NULL))
+		return "invalid UTF-8";
+	for (p = text; *p; p = g_utf8_next_char(p)) {
+		switch (g_unichar_type(g_utf8_get_char(p))) {
+		case G_UNICODE_CONTROL:
+			return "control character (one line, no Enter)";
+		case G_UNICODE_FORMAT:
+		case G_UNICODE_LINE_SEPARATOR:
+		case G_UNICODE_PARAGRAPH_SEPARATOR:
+		case G_UNICODE_UNASSIGNED:
+		case G_UNICODE_PRIVATE_USE:
+		case G_UNICODE_SURROGATE:
+			return "invisible or bidi character";
+		default:
+			break;
+		}
+	}
+	return NULL;
+}

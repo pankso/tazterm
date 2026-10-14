@@ -8,7 +8,7 @@ tazterm \- light GTK3/VTE terminal with split panes, AI friendly
 .B tazterm help
 .br
 .B tazterm ctl
-\fBls\fR | \fBread\fR | \fBblocks\fR | \fBwait\fR | \fBevents\fR | \fBnotify\fR | \fBguide\fR [\fIOPTIONS\fR]
+\fBls\fR | \fBread\fR | \fBblocks\fR | \fBwait\fR | \fBevents\fR | \fBnotify\fR | \fBsend\fR | \fBguide\fR [\fIOPTIONS\fR]
 .SH DESCRIPTION
 TazTerm is the SliTaz terminal: split panes in one window, a status
 line per pane, command blocks for bash, safe paste, and a read-only
@@ -98,7 +98,8 @@ command, its output, exit code and duration. busybox ash has no prompt
 hook: no blocks there.
 .SH TAZTERM CTL
 Every pane exports TAZTERM_SOCKET, TAZTERM_PANE and TERM_PROGRAM=tazterm.
-The socket is read-only: a program may read panes, never type into them.
+The socket is read-only: a program may read panes, never type into
+them, except with \fBsend\fR, confirmed by the user.
 .TP
 .B ls
 Panes: id, role, state, activity (busy, idle, bell, exited), process,
@@ -129,6 +130,13 @@ Stream pane events, one line each, until interrupted:
 .BR notify " [" \fITEXT\fR ]
 Outline the caller's pane in orange and set the window urgency hint.
 .TP
+.BR send " [" \-p " " \fIID\fR "] [" \-r "] [" \-w " [" \-t " " \fISECS\fR "]] " \fITEXT\fR
+Propose \fITEXT\fR (one line, at most 1024 bytes) for a pane, by
+default the one the user came from. A dialog shows it; nothing happens
+unless the user presses Run (Refuse is the default, no answer within
+2 minutes refuses). \fB\-r\fR: run it (Enter); \fB\-w\fR: run it,
+then wait like \fBwait\fR. Off unless \fBsend=true\fR in [ai].
+.TP
 .B guide
 How an AI agent should use tazterm (markdown).
 .PP
@@ -141,7 +149,7 @@ Keys, tokens and passwords are masked as [REDACTED] unless
 .I ~/.config/tazterm/tazterm.conf
 Configuration (created with every key and comments): font, shell,
 theme (slitaz, slitaz-light, tango, solarized-dark, solarized-light, vte), cursor
-shape, status line, alerts, agent. Every shortcut can be changed in
+shape, status line, alerts, agent, redact, send. Every shortcut can be changed in
 [keys] (action=Ctrl+Shift+E, several separated by spaces, empty to
 leave the key to the application).
 .TP

@@ -39,6 +39,7 @@ typedef struct {
 	int ai_explain_lines;  /* default 200 */
 	int ai_capture_lines;  /* default 2000 */
 	gboolean ai_redact;    /* mask secrets sent to agents, default TRUE */
+	gboolean ai_send;      /* ctl send allowed (confirmed), default FALSE */
 	TaztermKeys *keys;     /* shortcuts, [keys] */
 } TaztermConfig;
 

@@ -62,6 +62,11 @@ char *tazterm_ai_explain_prompt(VteTerminal *term, int nlines,
  * s is UTF-8; control characters become \uXXXX. */
 void tazterm_json_string(GString *out, const char *s);
 
+/* ctl send: NULL when text may be typed into a pane, else why not
+ * (static string). One line of visible text, TAZTERM_SEND_MAX bytes. */
+#define TAZTERM_SEND_MAX 1024
+const char *tazterm_ai_send_check(const char *text);
+
 G_END_DECLS
 
 #endif /* TAZTERM_AI_H */

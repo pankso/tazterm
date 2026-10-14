@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tazterm\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-11 22:18+0200\n"
+"POT-Creation-Date: 2026-10-14 22:09+0200\n"
 "PO-Revision-Date: 2026-09-24 20:00+0200\n"
 "Last-Translator: SliTaz Contributors\n"
 "Language-Team: French\n"
@@ -446,3 +446,59 @@ msgstr "Échap"
 #: src/tazterm-keys.c:276
 msgid "Close the search bar"
 msgstr "Fermer la barre de recherche"
+
+#: src/tazterm-ctl.c:985
+#, c-format
+msgid "pane %d (%s, %s)"
+msgstr "panneau %d (%s, %s)"
+
+#: src/tazterm-ctl.c:1004
+#, c-format
+msgid "Run this command in pane %d?"
+msgstr "Exécuter cette commande dans le panneau %d ?"
+
+#: src/tazterm-ctl.c:1005
+#, c-format
+msgid "Type this text in pane %d?"
+msgstr "Taper ce texte dans le panneau %d ?"
+
+#: src/tazterm-ctl.c:1007
+msgid "outside tazterm"
+msgstr "hors de tazterm"
+
+#: src/tazterm-ctl.c:1010
+#, c-format
+msgid ""
+"Asked by: %s\n"
+"Into: %s\n"
+"\n"
+"%s"
+msgstr ""
+"Demandé par : %s\n"
+"Vers : %s\n"
+"\n"
+"%s"
+
+#: src/tazterm-ctl.c:1011
+msgid "It runs as you, with Enter. Refuse unless you expected it."
+msgstr "Elle s'exécute en votre nom, avec Entrée. Refusez si vous ne l'attendiez pas."
+
+#: src/tazterm-ctl.c:1012
+msgid "Typed at the cursor, without Enter."
+msgstr "Tapé au curseur, sans Entrée."
+
+#: src/tazterm-ctl.c:1030
+msgid "Refuse"
+msgstr "Refuser"
+
+#: src/tazterm-ctl.c:1033
+msgid "_Run"
+msgstr "_Exécuter"
+
+#: src/tazterm-ctl.c:1033
+msgid "_Type"
+msgstr "_Taper"
+
+#: src/tazterm-ctl.c:1037
+msgid "TazTerm: agent request"
+msgstr "TazTerm : demande d'un agent"

@@ -6,7 +6,8 @@
  * Coding assistants: OpenCode & Claude
  */
 /* unit.c — Pure functions, no display: redaction, paste sanitizer,
- * command parsing. Exit status = number of failures. */
+ * command parsing, ctl send check.
+ * Exit status = number of failures. */
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -161,6 +162,25 @@ main(void)
 		check(g_utf8_validate(js->str, -1, NULL), "json invalid utf-8");
 		g_string_free(js, TRUE);
 	}
+
+	/* ctl send: one line of visible text, nothing hidden. */
+	check(!tazterm_ai_send_check("make -C src && echo ok été"),
+	    "send plain");
+	check(tazterm_ai_send_check("ls\nrm -rf ~") != NULL, "send newline");
+	check(tazterm_ai_send_check("ls\r") != NULL, "send CR");
+	check(tazterm_ai_send_check("a\033[2Jb") != NULL, "send escape");
+	check(tazterm_ai_send_check("a\302\233b") != NULL, "send C1");
+	check(tazterm_ai_send_check("ls \342\200\256txt") != NULL,
+	    "send bidi override");
+	check(tazterm_ai_send_check("r\342\200\213m") != NULL,
+	    "send zero width");
+	check(tazterm_ai_send_check("x\377y") != NULL, "send invalid utf-8");
+	check(tazterm_ai_send_check("") != NULL, "send empty");
+	s = g_strnfill(TAZTERM_SEND_MAX + 1, 'a');
+	check(tazterm_ai_send_check(s) != NULL, "send too long");
+	s[TAZTERM_SEND_MAX] = '\0';
+	check(!tazterm_ai_send_check(s), "send max length");
+	g_free(s);
 
 	return fails;
 }

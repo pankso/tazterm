@@ -7,7 +7,7 @@
 # Coding assistants: OpenCode & Claude
 #
 # ctl.sh — End to end with the real binary: -e/-hold, tazterm ctl,
-# redaction, errors, socket cleanup. Needs $DISPLAY, $BIN, and a
+# redaction, errors, socket cleanup, send. Needs $DISPLAY, $BIN, and a
 # private XDG_CONFIG_HOME / XDG_CACHE_HOME (set by run.sh).
 
 fails=0
@@ -64,6 +64,8 @@ kill $evpid $evjpid
 check "events: notify" 'grep -q "^notify 0 build done$" "$XDG_CACHE_HOME/ev"'
 check "events --json: notify" \
 	'grep -q "^{\"event\":\"notify\",\"pane\":0,\"text\":\"build done\"}$" "$XDG_CACHE_HOME/evj"'
+
+check "send is off by default" 'ctl send ls 2>&1 | grep -q "send is off"'
 
 kill $pid
 sleep 1
@@ -130,6 +132,46 @@ if command -v bash >/dev/null; then
 	pid=$!
 	sleep 2
 	check "agent found by its process" 'ctl ls | grep -q "^1	agent	"'
+	kill $pid
+	sleep 1
+fi
+
+# send: the user decides in a dialog, Refuse by default (xdotool plays
+# the user). Run stays insensitive 1 s: a key pressed at once is lost.
+if command -v xdotool >/dev/null && command -v bash >/dev/null; then
+	mkdir -p "$XDG_CACHE_HOME/sendconf/tazterm"
+	printf '[terminal]\nshell=/bin/bash\n[ai]\nsend=true\n' \
+		>"$XDG_CACHE_HOME/sendconf/tazterm/tazterm.conf"
+	# C locale: the dialog title is matched in English.
+	LC_ALL=C XDG_CONFIG_HOME=$XDG_CACHE_HOME/sendconf "$BIN" \
+		>/dev/null 2>&1 &
+	pid=$!
+	sleep 2
+	answer() {
+		sleep 2
+		w=$(xdotool search --name "agent request" | head -1)
+		[ -n "$w" ] && xdotool windowfocus --sync $w key "$@"
+	}
+	check "send: control character refused" \
+		'! ctl send "$(printf "ls\trm")" 2>/dev/null'
+	ctl send -r "echo nope" >"$XDG_CACHE_HOME/send" 2>&1 &
+	answer Return; wait $!
+	check "send: Enter refuses" \
+		'grep -q "refused by the user" "$XDG_CACHE_HOME/send"'
+	ctl send -r "echo nope" >"$XDG_CACHE_HOME/send" 2>&1 &
+	answer Escape; wait $!
+	check "send: Escape refuses" \
+		'grep -q "refused by the user" "$XDG_CACHE_HOME/send"'
+	ctl send -w "echo sent-ok; false" >"$XDG_CACHE_HOME/send" 2>&1 &
+	cpid=$!
+	sleep 1
+	check "send: one at a time" \
+		'ctl send ls 2>&1 | grep -q "another send"'
+	answer alt+r; wait $cpid; rc=$?
+	check "send -w: runs, waits, exit status" \
+		'[ $rc = 1 ] && grep -q "^sent-ok$" "$XDG_CACHE_HOME/send" &&
+		 grep -q "^\[exit 1" "$XDG_CACHE_HOME/send"'
+	check "send: never typed when refused" '! ctl read | grep -q nope'
 	kill $pid
 	sleep 1
 fi

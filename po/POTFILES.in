@@ -2,3 +2,4 @@ src/tazterm-window.c
 src/main.c
 src/tazterm-term.c
 src/tazterm-keys.c
+src/tazterm-ctl.c
