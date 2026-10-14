@@ -72,7 +72,7 @@ static const char default_conf[] =
 "# exit codes in the status bar), else /bin/sh (busybox ash)\n"
 "shell=" TAZTERM_DEFAULT_SHELL "\n"
 "scrollback_lines=" G_STRINGIFY(TAZTERM_DEFAULT_SCROLLBACK) "\n"
-"# Colors: slitaz | tango | solarized-dark | solarized-light | vte\n"
+"# Colors: slitaz | slitaz-light | tango | solarized-dark | solarized-light | vte\n"
 "# (VTE's own). foreground= / background= override the theme's.\n"
 "theme=slitaz\n"
 "#foreground=#e6e8ed\n"
@@ -114,6 +114,12 @@ static const struct {
 	    "#4a90d9", "#9b6fbf", "#2aa1b3", "#c8ccd4",
 	    "#5c6370", "#ef5b43", "#8ae234", "#fcd34d",
 	    "#7ab8f5", "#c49be0", "#56d4e6", "#f2f4f8" } },
+	/* SliTaz-Light GTK theme colors (lxtaz-ctrl light mode) */
+	{ "slitaz-light", { "#2b2f36", "#ffffff", "#d45500",
+	    "#2b2f36", "#c0392b", "#3b7d23", "#9a6700",
+	    "#2a6fbf", "#7d4f9e", "#1a8191", "#c8ccd4",
+	    "#5c6370", "#e0533d", "#4e9a06", "#b58900",
+	    "#4a90d9", "#9b6fbf", "#2aa1b3", "#e6e8ed" } },
 	{ "tango", { "#d3d7cf", "#2e3436", "",
 	    "#2e3436", "#cc0000", "#4e9a06", "#c4a000",
 	    "#3465a4", "#75507b", "#06989a", "#d3d7cf",

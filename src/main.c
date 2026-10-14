@@ -7,7 +7,7 @@
  */
 /* main.c — Options --working-directory / --shell / --version.
  * Shell precedence: --shell > TAZTERM_SHELL > config > /bin/sh.
- * Directory precedence: --working-directory > config > $HOME. */
+ * Directory precedence: --working-directory > config > launch dir. */
 #include <gtk/gtk.h>
 #include <stdlib.h>
 #include <string.h>
@@ -190,6 +190,11 @@ main(int argc, char *argv[])
 	 * the .desktop Icon= via hicolor, but the X window needs
 	 * _NET_WM_ICON, which GTK only sets from the window icon. */
 	gtk_window_set_default_icon_name("tazterm");
+
+	/* Like xterm: start where we were launched (file manager
+	 * "Terminal here", menu = $HOME), unless told otherwise. */
+	if (!opt_workdir && !cfg->workdir)
+		opt_workdir = g_get_current_dir();
 
 	opts.shell = opt_shell;
 	opts.workdir = opt_workdir;

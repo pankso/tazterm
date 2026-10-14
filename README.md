@@ -94,7 +94,7 @@ font=Monospace 12
 # auto: bash when installed (command blocks), else /bin/sh
 shell=auto
 scrollback_lines=10000
-# slitaz | tango | solarized-dark | solarized-light | vte
+# slitaz | slitaz-light | tango | solarized-dark | solarized-light | vte
 theme=slitaz
 #cursor_shape=block
 #bold_is_bright=false
